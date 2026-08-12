@@ -2,528 +2,346 @@
 
 > **Step into a memory. Press play.**
 
-Nostalgic Moments is an immersive music experience designed to bring old memories back through **nostalgic places, classic songs, ambient visuals, and curated playlists**.
+**Nostalgic Moments** is an immersive music platform built around memories, places, and atmosphere.
 
-Instead of using a traditional music-player interface, Nostalgic Moments lets users enter different environments — such as an old salon, a running bus, a tea stall, or a car ride — and listen to music that matches the atmosphere.
+Instead of simply listening to a playlist, users can enter nostalgic environments such as an old salon, a running bus, a tea stall, or a car ride and experience music in an environment designed around that moment.
 
 ---
 
-## ✨ Concept
+## 🌐 About
 
-Music is often connected to memories.
+Nostalgic Moments combines:
 
-A song can remind us of:
+* 🎵 Music
+* 🎞️ Nostalgic environments
+* 🚌 Everyday memories
+* 📻 Retro atmosphere
+* 🎧 Curated playlists
+* ✨ Interactive experiences
 
-* An old bus journey
-* A neighborhood salon
-* Sitting at a tea stall
-* Travelling in an old car
-* Listening to songs on the radio
-* Spending time with friends
-* The atmosphere of the 90s and early 2000s
+The goal is simple:
 
-**Nostalgic Moments** tries to recreate those feelings through an interactive web experience.
-
-```text
-                 NOSTALGIC MOMENTS
-                         │
-             ┌───────────┴───────────┐
-             │                       │
-         Choose a                 Choose
-         Moment                    Music
-             │                       │
-             └───────────┬───────────┘
-                         │
-                   Press Play 🎵
-                         │
-                 Relive the Moment
-```
+> **Turn listening to music into experiencing a memory.**
 
 ---
 
 ## 🎧 Experiences
 
-The platform is designed around different nostalgic environments.
+Experiences are organized around different environments and moments.
 
-### 🚌 Running Bus
+Examples include:
 
-Experience the feeling of travelling in an old bus while listening to nostalgic songs.
+* 🚌 **Running Bus**
+* 💈 **Old Salon**
+* 🫖 **Tea Stall**
+* 🚗 **Car Ride**
+* 📻 **Vintage Radio**
+* 🚂 **Train Journey**
 
-### 💈 Old Salon
-
-Step into a classic neighborhood salon with an old-school atmosphere and music.
-
-### 🫖 Tea Stall
-
-A nostalgic tea-stall environment inspired by everyday Indian street life.
-
-### 🚗 Car Ride
-
-A relaxed road-trip experience with music playing in the background.
-
-### 📻 More Experiences
-
-The platform is designed so that new experiences can be added from the admin panel without changing the frontend code.
+New experiences can be added and managed through the platform's content management system.
 
 ---
 
-# 🎵 Music Player
+## 🎵 Music Experience
 
-Each experience contains an immersive music player.
+Each environment has its own music experience.
 
-### Player Features
+Depending on the experience, users can access:
 
-* ▶️ Play
-* ⏸️ Pause
-* ⏮️ Previous
-* ⏭️ Next
-* 🔊 Volume control
-* 🔇 Mute
-* 🎚️ Seek/progress bar
-* 🔀 Shuffle
-* 🔁 Repeat
-* ❤️ Like/Favorite
-* 🎵 Current song information
-* 📋 Playlist / Queue
-* ⛶ Fullscreen experience
+* Play / Pause
+* Previous / Next
+* Seek
+* Volume
+* Mute
+* Shuffle
+* Repeat
+* Playlist / Queue
+* Song information
+* Fullscreen experience
 
-The player is designed to blend into the environment instead of looking like a conventional music-player interface.
+The player is designed as part of the environment rather than functioning as a separate conventional music-player interface.
 
 ---
 
-# 🛠️ Technology Stack
-
-## Frontend
-
-* **Next.js**
-* **TypeScript**
-* **Tailwind CSS**
-* **Framer Motion**
-* HTML5 Audio API
-
-Next.js is used for:
-
-* SEO
-* Server-side rendering
-* Static generation
-* Dynamic routes
-* Metadata
-* Open Graph
-* Responsive UI
-* Immersive animations
-
----
-
-## Backend
-
-* **FastAPI**
-* **Python**
-* **SQLAlchemy**
-* **Alembic**
-* **Pydantic**
-* REST API
-* Authentication
-
-FastAPI handles:
-
-* Categories
-* Songs
-* Playlists
-* Admin authentication
-* Song management
-* Category management
-* Upload management
-* Player data
-* Application configuration
-
----
-
-## Database
-
-* **PostgreSQL**
-
-The database stores structured information such as:
-
-```text
-Categories
-Songs
-Artists
-Playlists
-Users
-Admin accounts
-Song relationships
-Experience configuration
-```
-
-The actual audio files are not stored directly inside PostgreSQL.
-
----
-
-## File Storage
-
-Audio and media files are stored using object/file storage.
-
-Example:
-
-```text
-storage/
-│
-├── music/
-│   ├── bus/
-│   ├── salon/
-│   ├── tea-stall/
-│   └── car/
-│
-├── covers/
-│
-└── backgrounds/
-```
-
-The database stores the corresponding file URLs.
-
----
-
-# 🏗️ Architecture
+## 🏗️ Architecture
 
 ```text
                          USER
                            │
                            ▼
-                  ┌─────────────────┐
-                  │     Next.js     │
-                  │    Frontend     │
-                  │                 │
-                  │  SEO + UI +     │
-                  │  Music Player   │
-                  └────────┬────────┘
+                    ┌─────────────┐
+                    │   Next.js   │
+                    │  Frontend   │
+                    └──────┬──────┘
                            │
-                         REST API
+                         HTTPS
                            │
                            ▼
-                  ┌─────────────────┐
-                  │     FastAPI     │
-                  │     Backend     │
-                  │                 │
-                  │ Auth            │
-                  │ Categories      │
-                  │ Songs           │
-                  │ Playlists       │
-                  │ Admin APIs      │
-                  └────────┬────────┘
+                    ┌─────────────┐
+                    │   FastAPI   │
+                    │   Backend   │
+                    └──────┬──────┘
                            │
-                ┌──────────┴──────────┐
-                ▼                     ▼
-        ┌───────────────┐     ┌───────────────┐
-        │  PostgreSQL   │     │ File Storage  │
-        │   Database    │     │               │
-        │               │     │ MP3 / Images  │
-        └───────────────┘     └───────────────┘
+                    ┌──────┴──────┐
+                    │             │
+                    ▼             ▼
+             ┌────────────┐ ┌─────────────┐
+             │ PostgreSQL │ │ Object      │
+             │ Database   │ │ Storage     │
+             └────────────┘ └─────────────┘
 ```
+
+### Frontend
+
+**Next.js + TypeScript**
+
+Responsible for:
+
+* User interface
+* Experience pages
+* Music player
+* Animations
+* SEO
+* Metadata
+* Responsive design
+
+### Backend
+
+**FastAPI + Python**
+
+Responsible for:
+
+* REST API
+* Authentication
+* Categories
+* Songs
+* Playlists
+* Content management
+* Application logic
+
+### Database
+
+**PostgreSQL**
+
+Stores structured application data including:
+
+* Experiences
+* Songs
+* Artists
+* Playlists
+* Users
+* Relationships
+* Application configuration
+
+### Object Storage
+
+Used for media assets such as:
+
+* Audio files
+* Cover artwork
+* Background images
+* Other experience assets
+
+Large media files are not stored directly inside the relational database.
 
 ---
 
-# 📂 Project Structure
+# 🔐 Content Management
+
+Nostalgic Moments includes an administrative system for managing platform content.
+
+Administrators can manage:
+
+### Experiences
+
+* Create experiences
+* Edit experiences
+* Enable / disable experiences
+* Change descriptions
+* Manage backgrounds
+* Manage thumbnails
+* Control display order
+
+### Songs
+
+* Add songs
+* Edit song information
+* Assign songs to experiences
+* Change playlist order
+* Enable / disable songs
+* Manage artwork
+* Manage media references
+
+The frontend does not need to be modified when content is updated through the administration system.
+
+---
+
+# 🗄️ Data Model
+
+The application uses a relational data model.
+
+```text
+User
+ │
+ └── Role
+
+
+Experience
+ │
+ ├── Metadata
+ ├── Background
+ └── Songs
+       │
+       └── Song
+
+
+Song
+ │
+ ├── Title
+ ├── Artist
+ ├── Artwork
+ ├── Audio reference
+ └── Metadata
+```
+
+A song can be associated with multiple experiences where appropriate.
+
+---
+
+# 🔍 SEO
+
+Public experience pages are designed with search visibility in mind.
+
+The Next.js frontend supports:
+
+* Server-rendered content
+* SEO metadata
+* Open Graph metadata
+* Semantic URLs
+* Sitemap generation
+* Robots configuration
+* Social sharing metadata
+* Optimized page structure
+
+Example:
+
+```text
+/experience/running-bus
+/experience/salon
+/experience/tea-stall
+```
+
+rather than relying only on query-based URLs.
+
+---
+
+# 🛡️ Security
+
+Production security is treated separately from the public frontend.
+
+The backend is responsible for:
+
+* Authentication
+* Authorization
+* Input validation
+* Protected administrative endpoints
+* Secure password handling
+* API validation
+* CORS configuration
+* Environment-based secrets
+
+Sensitive credentials and service keys must never be committed to the repository.
+
+---
+
+# ⚙️ Environment Configuration
+
+Configuration is provided through environment variables.
+
+Example frontend configuration:
+
+```env
+NEXT_PUBLIC_API_URL=
+```
+
+Example backend configuration:
+
+```env
+DATABASE_URL=
+SECRET_KEY=
+STORAGE_URL=
+STORAGE_BUCKET=
+```
+
+Actual production credentials must never be included in source control.
+
+---
+
+# 🚀 Production Deployment
+
+The application is designed to run as separate frontend and backend services.
+
+```text
+                         DOMAIN
+                            │
+                            ▼
+                       Next.js
+                            │
+                            │ HTTPS API
+                            ▼
+                         FastAPI
+                            │
+                 ┌──────────┴──────────┐
+                 ▼                     ▼
+             PostgreSQL          Object Storage
+```
+
+The exact infrastructure provider may vary between environments.
+
+---
+
+# 📁 Repository Structure
 
 ```text
 nostalgic-moments/
 │
 ├── frontend/
 │   ├── src/
-│   │   ├── app/
-│   │   │   ├── page.tsx
-│   │   │   ├── experiences/
-│   │   │   └── player/
-│   │   │
-│   │   ├── components/
-│   │   │   ├── player/
-│   │   │   ├── experience/
-│   │   │   ├── navigation/
-│   │   │   └── ui/
-│   │   │
-│   │   ├── hooks/
-│   │   ├── lib/
-│   │   ├── services/
-│   │   └── types/
-│   │
 │   ├── public/
 │   ├── package.json
-│   └── README.md
+│   └── ...
 │
 ├── backend/
 │   ├── app/
-│   │   ├── api/
-│   │   ├── core/
-│   │   ├── models/
-│   │   ├── schemas/
-│   │   ├── services/
-│   │   ├── repositories/
-│   │   └── main.py
-│   │
-│   ├── alembic/
+│   ├── migrations/
 │   ├── requirements.txt
-│   └── README.md
+│   └── ...
 │
 ├── .gitignore
-├── LICENSE
-└── README.md
+├── README.md
+└── LICENSE
 ```
 
 ---
 
-# 🗄️ Database Structure
+# 🧪 Development
 
-The main entities are:
+## Requirements
 
-```text
-users
-│
-├── id
-├── email
-├── password_hash
-└── role
+* Node.js
+* Python
+* PostgreSQL
+* Git
 
-
-categories
-│
-├── id
-├── name
-├── slug
-├── description
-├── background_url
-├── thumbnail_url
-├── is_active
-└── sort_order
-
-
-songs
-│
-├── id
-├── title
-├── artist
-├── album
-├── audio_url
-├── cover_url
-├── duration
-└── is_active
-
-
-category_songs
-│
-├── category_id
-├── song_id
-└── sort_order
-```
-
-A many-to-many relationship between categories and songs allows the same song to appear in multiple experiences without duplicating the actual song record.
-
-Example:
-
-```text
-Song A
- ├── Running Bus
- └── Salon
-```
-
----
-
-# 🔐 Admin Panel
-
-The platform includes an admin panel for managing content.
-
-## Category Management
-
-Administrators can:
-
-* Create categories
-* Edit categories
-* Delete categories
-* Enable/disable categories
-* Change category order
-* Change background
-* Change thumbnail
-* Edit description
-
-Example:
-
-```text
-Running Bus
-Salon
-Tea Stall
-Running Car
-Railway Station
-```
-
----
-
-## 🎵 Song Management
-
-Administrators can:
-
-* Upload songs
-* Edit song information
-* Delete songs
-* Change categories
-* Upload cover artwork
-* Enable/disable songs
-* Change playlist order
-
-Example:
-
-```text
-Song
-  ↓
-Category
-  ↓
-Running Bus
-```
-
-The category can be changed from the admin panel without modifying the frontend code.
-
----
-
-# 🔌 API
-
-Example API structure:
-
-```text
-GET    /api/categories
-GET    /api/categories/{slug}
-
-GET    /api/songs
-GET    /api/songs/{id}
-
-GET    /api/player/{category}
-
-POST   /api/admin/login
-
-POST   /api/admin/categories
-PUT    /api/admin/categories/{id}
-DELETE /api/admin/categories/{id}
-
-POST   /api/admin/songs
-PUT    /api/admin/songs/{id}
-DELETE /api/admin/songs/{id}
-```
-
----
-
-# 🌐 Frontend Routes
-
-```text
-/
-```
-
-Landing page.
-
-```text
-/experiences
-```
-
-All available experiences.
-
-```text
-/experience/running-bus
-```
-
-Running Bus experience.
-
-```text
-/experience/salon
-```
-
-Salon experience.
-
-```text
-/experience/tea-stall
-```
-
-Tea Stall experience.
-
-```text
-/experience/running-car
-```
-
-Running Car experience.
-
-```text
-/admin
-```
-
-Admin dashboard.
-
----
-
-# 🔍 SEO
-
-SEO is an important part of the frontend architecture.
-
-Next.js is used to provide:
-
-* Server-side rendering
-* Static generation
-* Dynamic metadata
-* Open Graph metadata
-* Social sharing cards
-* Sitemap
-* Robots.txt
-* Semantic HTML
-* SEO-friendly URLs
-
-Example:
-
-```text
-/experience/running-bus
-```
-
-instead of:
-
-```text
-/player?id=123
-```
-
-Each experience can have its own:
-
-* Title
-* Description
-* Preview image
-* Metadata
-* Social sharing information
-
----
-
-# 🚀 Development
-
-## Clone the Repository
-
-```bash
-git clone https://github.com/YOUR_USERNAME/nostalgic-moments.git
-
-cd nostalgic-moments
-```
-
----
-
-# Frontend Setup
+### Frontend
 
 ```bash
 cd frontend
-
 npm install
-
 npm run dev
 ```
 
-Frontend:
-
-```text
-http://localhost:3000
-```
-
----
-
-# Backend Setup
-
-Create a virtual environment:
+### Backend
 
 ```bash
 cd backend
@@ -531,7 +349,7 @@ cd backend
 python -m venv venv
 ```
 
-Activate it on Windows:
+Windows:
 
 ```bash
 venv\Scripts\activate
@@ -543,264 +361,82 @@ Install dependencies:
 pip install -r requirements.txt
 ```
 
-Run FastAPI:
+Start the API:
 
 ```bash
 uvicorn app.main:app --reload
 ```
 
-Backend:
+---
+
+# 🔌 API
+
+The backend exposes REST APIs for the frontend and administration system.
+
+Typical resources include:
 
 ```text
-http://localhost:8000
+/api/experiences
+/api/experiences/{slug}
+
+/api/songs
+/api/songs/{id}
+
+/api/playlists
+
+/api/admin/auth
+/api/admin/experiences
+/api/admin/songs
 ```
 
-API documentation:
-
-```text
-http://localhost:8000/docs
-```
+The exact API surface may evolve as the platform develops.
 
 ---
 
-# ⚙️ Environment Variables
+# 📊 Scalability
 
-## Frontend
+The initial architecture intentionally avoids unnecessary infrastructure complexity.
 
-Create:
+The platform does **not require Kafka, Redis, Kubernetes, or a microservice architecture** for its core functionality.
 
-```text
-frontend/.env.local
-```
+Additional infrastructure can be introduced when actual traffic and operational requirements justify it.
 
-Example:
+Potential future additions may include:
 
-```env
-NEXT_PUBLIC_API_URL=http://localhost:8000/api
-```
+* CDN-based media delivery
+* Application caching
+* Background processing
+* Analytics pipelines
+* Search infrastructure
+* Event processing
 
----
-
-## Backend
-
-Create:
-
-```text
-backend/.env
-```
-
-Example:
-
-```env
-DATABASE_URL=postgresql+asyncpg://USER:PASSWORD@HOST/DATABASE
-
-SECRET_KEY=your-secret-key
-
-STORAGE_BUCKET=music
-
-STORAGE_URL=your-storage-url
-```
-
-Never commit `.env` files to GitHub.
+These should be introduced based on measured requirements rather than assumed scale.
 
 ---
 
-# ☁️ Deployment
+# 🎵 Music & Media Rights
 
-Recommended deployment architecture:
+Nostalgic Moments does not grant rights to third-party music, artwork, images, videos, or other media.
 
-```text
-                  DOMAIN
-                     │
-                     ▼
-                  Vercel
-                     │
-                  Next.js
-                     │
-                     │ API
-                     ▼
-                  Render
-                     │
-                  FastAPI
-                     │
-             ┌───────┴────────┐
-             ▼                ▼
-        PostgreSQL         Storage
-```
+All production media must be:
 
-### Frontend
+* Owned by the platform owner, or
+* Properly licensed, or
+* Used under an applicable legal permission or license.
 
-Deploy Next.js using:
+Third-party copyrighted music must not be uploaded or distributed without the necessary rights.
 
-**Vercel**
-
-### Backend
-
-Deploy FastAPI using:
-
-**Render**
-
-### Database & Storage
-
-Use:
-
-**Supabase**
-
-This architecture keeps the frontend, backend, database, and media storage separated.
-
----
-
-# 🚧 Project Status
-
-> 🚧 **Currently in development**
-
-### Completed
-
-* [x] Project concept
-* [x] Technology stack planning
-* [x] Application architecture
-
-### In Progress
-
-* [ ] Landing page
-* [ ] Experience selection
-* [ ] Music player
-* [ ] Responsive design
-* [ ] FastAPI backend
-* [ ] PostgreSQL database
-* [ ] Admin authentication
-* [ ] Category management
-* [ ] Song management
-* [ ] File storage
-* [ ] SEO optimization
-
-### Planned
-
-* [ ] Playlist management
-* [ ] Analytics
-* [ ] Favorites
-* [ ] More nostalgic environments
-* [ ] Performance optimization
-* [ ] Production deployment
-
----
-
-# 🗺️ Roadmap
-
-## Phase 1 — Foundation
-
-* Next.js setup
-* FastAPI setup
-* PostgreSQL setup
-* API architecture
-* Authentication
-
-## Phase 2 — Experience UI
-
-* Landing page
-* Experience cards
-* Immersive backgrounds
-* Animations
-* Responsive design
-
-## Phase 3 — Music Player
-
-* Audio engine
-* Play/pause
-* Next/previous
-* Volume
-* Seek
-* Shuffle
-* Repeat
-* Queue
-
-## Phase 4 — Admin Panel
-
-* Dashboard
-* Category management
-* Song management
-* Upload system
-* Playlist management
-
-## Phase 5 — SEO & Performance
-
-* Metadata
-* Sitemap
-* Open Graph
-* Image optimization
-* Audio optimization
-* Caching where necessary
-
-## Phase 6 — Production
-
-* Custom domain
-* HTTPS
-* Deployment
-* Monitoring
-* Error handling
-* Backup strategy
-
----
-
-# 🔮 Future Experiences
-
-Possible future environments include:
-
-* 🚂 Old Train Journey
-* 📻 Vintage Radio
-* 🛺 Auto Rickshaw
-* 🌧️ Rainy Window
-* 🏪 Old Grocery Shop
-* 🎬 Old Cinema Hall
-* 🏫 School Memory
-* 🌆 90s Kolkata Street
-* ☕ Old Coffee House
-* 🎉 Puja Memories
-
-The platform is designed so that new experiences can be added without changing the core music-player architecture.
-
----
-
-# ⚠️ Music & Copyright
-
-Nostalgic Moments is a software project and does not automatically grant rights to copyrighted music.
-
-Only upload or stream music for which you have the appropriate rights, licenses, or permission.
-
-Do not upload copyrighted commercial recordings without the necessary authorization.
-
-The same principle applies to:
-
-* Music
-* Album artwork
-* Background images
-* Videos
-* Logos
-* Other third-party media
-
----
-
-# 🤝 Contributing
-
-Contributions are welcome if this repository is opened for contributions in the future.
-
-Before submitting a pull request:
-
-1. Create a feature branch.
-2. Make your changes.
-3. Test the frontend and backend.
-4. Keep API changes documented.
-5. Submit a pull request with a clear description.
+The software license for this repository does **not** grant permission to use any third-party music or media included in a deployment.
 
 ---
 
 # 📜 License
 
-This project is currently **source-available for viewing and portfolio purposes**.
+The source code of Nostalgic Moments is **not licensed for unrestricted redistribution or commercial reuse** unless explicitly permitted by the copyright holder.
 
-Unless explicitly stated otherwise, the source code may not be copied, modified, redistributed, or used commercially without permission from the copyright holder.
+Copyright and licensing terms for the software are defined in the repository's `LICENSE` file.
 
-See the repository's `LICENSE` file for the applicable terms.
+Music, artwork, photographs, videos, trademarks, and other third-party assets are governed by their respective rights and licenses and are not automatically covered by the software license.
 
 ---
 
@@ -808,26 +444,9 @@ See the repository's `LICENSE` file for the applicable terms.
 
 **Arka Maitra**
 
-Full-Stack Developer
-
-### Interests
-
-* Web Development
-* Python
-* FastAPI
-* Next.js
-* AI/ML
-* Electronics
-* Creative Interactive Experiences
-
 ---
 
-# ⭐ Support
+## 🎵 Nostalgic Moments
 
-If you find the project interesting, consider giving the repository a ⭐ on GitHub.
+**Step into a memory. Press play.**
 
----
-
-# 🎵 Nostalgic Moments
-
-> **Step into a memory. Press play.**
