@@ -6,7 +6,7 @@ from datetime import datetime
 
 class LoginRequest(BaseModel):
     email: EmailStr
-    password: str = Field(..., min_length=4)
+    password: str = Field(..., min_length=4, max_length=128)
 
 
 class Token(BaseModel):
@@ -21,12 +21,18 @@ class TokenData(BaseModel):
     role: Optional[str] = None
 
 
+class ChangePasswordRequest(BaseModel):
+    current_password: str = Field(..., min_length=4, max_length=128)
+    new_password: str = Field(..., min_length=6, max_length=128)
+
+
 class AdminUserResponse(BaseModel):
     id: uuid.UUID
-    email: str
+    email: EmailStr
     role: str
     is_active: bool
     created_at: datetime
 
     class Config:
         from_attributes = True
+

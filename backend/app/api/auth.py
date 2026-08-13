@@ -6,9 +6,9 @@ from sqlalchemy import select
 
 from app.api.deps import get_db_session, get_current_admin
 from app.core.config import settings
-from app.core.security import verify_password, create_access_token
+from app.core.security import verify_password, get_password_hash, create_access_token
 from app.models.admin import AdminUser
-from app.schemas.auth import Token, AdminUserResponse, LoginRequest
+from app.schemas.auth import Token, AdminUserResponse, LoginRequest, ChangePasswordRequest
 
 router = APIRouter()
 
@@ -70,3 +70,24 @@ async def logout(response: Response):
 async def get_me(current_admin: AdminUser = Depends(get_current_admin)):
     """Return currently authenticated admin user info."""
     return current_admin
+
+
+@router.post("/change-password", summary="Change Admin Password")
+async def change_password(
+    password_data: ChangePasswordRequest,
+    current_admin: AdminUser = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db_session),
+):
+    """Securely update the authenticated admin password."""
+    if not verify_password(password_data.current_password, current_admin.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Current password verification failed",
+        )
+
+    current_admin.password_hash = get_password_hash(password_data.new_password)
+    db.add(current_admin)
+    await db.commit()
+
+    return {"message": "Password updated successfully"}
+
