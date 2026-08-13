@@ -12,10 +12,10 @@ Instead of simply listening to a playlist, users can enter nostalgic environment
 
 Nostalgic Moments combines:
 
-* 🎵 Music
-* 🎞️ Nostalgic environments
-* 🚌 Everyday memories
-* 📻 Retro atmosphere
+* 🎵 Music & environmental audio
+* 🎞️ Nostalgic Indian atmospheres & environments
+* 🚌 Everyday memories & rich visual themes
+* 📻 Retro atmosphere & player controls
 * 🎧 Curated playlists
 * ✨ Interactive experiences
 
@@ -27,9 +27,7 @@ The goal is simple:
 
 ## 🎧 Experiences
 
-Experiences are organized around different environments and moments.
-
-Examples include:
+Experiences are organized around different environments and moments:
 
 * 🚌 **Running Bus**
 * 💈 **Old Salon**
@@ -38,415 +36,153 @@ Examples include:
 * 📻 **Vintage Radio**
 * 🚂 **Train Journey**
 
-New experiences can be added and managed through the platform's content management system.
+New experiences and songs can be added and managed seamlessly through the platform's administration system.
 
 ---
 
-## 🎵 Music Experience
-
-Each environment has its own music experience.
-
-Depending on the experience, users can access:
-
-* Play / Pause
-* Previous / Next
-* Seek
-* Volume
-* Mute
-* Shuffle
-* Repeat
-* Playlist / Queue
-* Song information
-* Fullscreen experience
-
-The player is designed as part of the environment rather than functioning as a separate conventional music-player interface.
-
----
-
-## 🏗️ Architecture
+## 🏗️ Architecture Overview
 
 ```text
-                         USER
-                           │
-                           ▼
-                    ┌─────────────┐
-                    │   Next.js   │
-                    │  Frontend   │
-                    └──────┬──────┘
-                           │
-                         HTTPS
-                           │
-                           ▼
-                    ┌─────────────┐
-                    │   FastAPI   │
-                    │   Backend   │
-                    └──────┬──────┘
-                           │
-                    ┌──────┴──────┐
-                    │             │
-                    ▼             ▼
-             ┌────────────┐ ┌─────────────┐
-             │ PostgreSQL │ │ Object      │
-             │ Database   │ │ Storage     │
-             └────────────┘ └─────────────┘
+ ┌─────────────────────────────────────────────────────────────┐
+ │                     Next.js Frontend                        │
+ │  - App Router (TypeScript, Tailwind CSS, Lucide Icons)      │
+ │  - HTML5 Audio Environmental Player with Volume & Presets   │
+ └──────────────┬──────────────────────────────┬───────────────┘
+                │ REST API                     │ Storage URLs
+                ▼                              ▼
+ ┌─────────────────────────────┐  ┌────────────────────────────┐
+ │       FastAPI Backend       │  │      Object / Cloud        │
+ │  - SQLAlchemy 2.x (Async)   │  │  - /music                  │
+ │  - Alembic Migrations       │  │  - /covers                 │
+ │  - JWT Admin Auth & CRUD    │  │  - /backgrounds            │
+ └──────────────┬──────────────┘  └────────────────────────────┘
+                │
+                ▼
+ ┌─────────────────────────────┐
+ │     Relational Database     │
+ │  - AdminUsers, Categories,  │
+ │    Songs, CategorySongs M:N │
+ └─────────────────────────────┘
 ```
 
-### Frontend
-
-**Next.js + TypeScript**
-
-Responsible for:
-
-* User interface
-* Experience pages
-* Music player
-* Animations
-* SEO
-* Metadata
-* Responsive design
-
-### Backend
-
-**FastAPI + Python**
-
-Responsible for:
-
-* REST API
-* Authentication
-* Categories
-* Songs
-* Playlists
-* Content management
-* Application logic
-
-### Database
-
-**PostgreSQL**
-
-Stores structured application data including:
-
-* Experiences
-* Songs
-* Artists
-* Playlists
-* Users
-* Relationships
-* Application configuration
-
-### Object Storage
-
-Used for media assets such as:
-
-* Audio files
-* Cover artwork
-* Background images
-* Other experience assets
-
-Large media files are not stored directly inside the relational database.
+- **Frontend**: Next.js 14+ (App Router, TypeScript, Tailwind CSS, Lucide Icons)
+- **Backend**: FastAPI, Python 3.11+, SQLAlchemy 2.x Async Engine, Alembic, Pydantic v2, JWT Security
+- **Database**: PostgreSQL (with SQLite async fallback for local development)
+- **Storage**: Supabase / Object Storage / Local Storage
 
 ---
 
-# 🔐 Content Management
+## 🛠️ Quick Start & Local Setup
 
-Nostalgic Moments includes an administrative system for managing platform content.
-
-Administrators can manage:
-
-### Experiences
-
-* Create experiences
-* Edit experiences
-* Enable / disable experiences
-* Change descriptions
-* Manage backgrounds
-* Manage thumbnails
-* Control display order
-
-### Songs
-
-* Add songs
-* Edit song information
-* Assign songs to experiences
-* Change playlist order
-* Enable / disable songs
-* Manage artwork
-* Manage media references
-
-The frontend does not need to be modified when content is updated through the administration system.
-
----
-
-# 🗄️ Data Model
-
-The application uses a relational data model.
-
-```text
-User
- │
- └── Role
-
-
-Experience
- │
- ├── Metadata
- ├── Background
- └── Songs
-       │
-       └── Song
-
-
-Song
- │
- ├── Title
- ├── Artist
- ├── Artwork
- ├── Audio reference
- └── Metadata
-```
-
-A song can be associated with multiple experiences where appropriate.
-
----
-
-# 🔍 SEO
-
-Public experience pages are designed with search visibility in mind.
-
-The Next.js frontend supports:
-
-* Server-rendered content
-* SEO metadata
-* Open Graph metadata
-* Semantic URLs
-* Sitemap generation
-* Robots configuration
-* Social sharing metadata
-* Optimized page structure
-
-Example:
-
-```text
-/experience/running-bus
-/experience/salon
-/experience/tea-stall
-```
-
-rather than relying only on query-based URLs.
-
----
-
-# 🛡️ Security
-
-Production security is treated separately from the public frontend.
-
-The backend is responsible for:
-
-* Authentication
-* Authorization
-* Input validation
-* Protected administrative endpoints
-* Secure password handling
-* API validation
-* CORS configuration
-* Environment-based secrets
-
-Sensitive credentials and service keys must never be committed to the repository.
-
----
-
-# ⚙️ Environment Configuration
-
-Configuration is provided through environment variables.
-
-Example frontend configuration:
-
-```env
-NEXT_PUBLIC_API_URL=
-```
-
-Example backend configuration:
-
-```env
-DATABASE_URL=
-SECRET_KEY=
-STORAGE_URL=
-STORAGE_BUCKET=
-```
-
-Actual production credentials must never be included in source control.
-
----
-
-# 🚀 Production Deployment
-
-The application is designed to run as separate frontend and backend services.
-
-```text
-                         DOMAIN
-                            │
-                            ▼
-                       Next.js
-                            │
-                            │ HTTPS API
-                            ▼
-                         FastAPI
-                            │
-                 ┌──────────┴──────────┐
-                 ▼                     ▼
-             PostgreSQL          Object Storage
-```
-
-The exact infrastructure provider may vary between environments.
-
----
-
-# 📁 Repository Structure
-
-```text
-nostalgic-moments/
-│
-├── frontend/
-│   ├── src/
-│   ├── public/
-│   ├── package.json
-│   └── ...
-│
-├── backend/
-│   ├── app/
-│   ├── migrations/
-│   ├── requirements.txt
-│   └── ...
-│
-├── .gitignore
-├── README.md
-└── LICENSE
-```
-
----
-
-# 🧪 Development
-
-## Requirements
-
-* Node.js
-* Python
-* PostgreSQL
-* Git
-
-### Frontend
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-### Backend
+### 1. Backend Setup
 
 ```bash
 cd backend
 
+# 1. Create and activate virtual environment
 python -m venv venv
-```
+# On Windows PowerShell:
+.\venv\Scripts\Activate.ps1
+# On Linux/macOS:
+# source venv/bin/activate
 
-Windows:
-
-```bash
-venv\Scripts\activate
-```
-
-Install dependencies:
-
-```bash
+# 2. Install dependencies
 pip install -r requirements.txt
+
+# 3. Configure environment variables
+cp .env.example .env
+
+# 4. Run Alembic Database Migrations & Database Init
+python run.py
 ```
 
-Start the API:
+FastAPI Interactive Docs will be accessible at: `http://localhost:8000/api/docs`
+
+---
+
+### 2. Frontend Setup
 
 ```bash
-uvicorn app.main:app --reload
+cd frontend
+
+# 1. Install Node dependencies
+npm install
+
+# 2. Configure environment variables
+cp .env.example .env.local
+
+# 3. Start Next.js Development Server
+npm run dev
 ```
 
+Next.js Frontend will be accessible at: `http://localhost:3000`
+
 ---
 
-# 🔌 API
+## 🔑 Environment Configuration
 
-The backend exposes REST APIs for the frontend and administration system.
+### Backend (`backend/.env`)
 
-Typical resources include:
-
-```text
-/api/experiences
-/api/experiences/{slug}
-
-/api/songs
-/api/songs/{id}
-
-/api/playlists
-
-/api/admin/auth
-/api/admin/experiences
-/api/admin/songs
+```env
+DATABASE_URL=sqlite+aiosqlite:///./nostalgia.db
+SECRET_KEY=your-jwt-secret-key-change-in-production
+JWT_ALGORITHM=HS256
+JWT_ACCESS_TOKEN_EXPIRE_MINUTES=1440
+CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+INITIAL_ADMIN_EMAIL=admin@nostalgia.com
+INITIAL_ADMIN_PASSWORD=AdminSecurePass2026!
 ```
 
-The exact API surface may evolve as the platform develops.
+### Frontend (`frontend/.env.local`)
+
+```env
+NEXT_PUBLIC_API_URL=http://localhost:8000
+```
+
+> **Note**: Real production credentials and `.env` files must never be committed to source control.
 
 ---
 
-# 📊 Scalability
+## 🗄️ Database Models
 
-The initial architecture intentionally avoids unnecessary infrastructure complexity.
-
-The platform does **not require Kafka, Redis, Kubernetes, or a microservice architecture** for its core functionality.
-
-Additional infrastructure can be introduced when actual traffic and operational requirements justify it.
-
-Potential future additions may include:
-
-* CDN-based media delivery
-* Application caching
-* Background processing
-* Analytics pipelines
-* Search infrastructure
-* Event processing
-
-These should be introduced based on measured requirements rather than assumed scale.
+1. **`admin_users`**: Admin credentials (`email`, `password_hash`, `role`, `is_active`)
+2. **`categories`**: Nostalgic environments (`name`, `slug`, `tagline`, `background_url`, `theme_config`)
+3. **`songs`**: Music records (`title`, `artist`, `duration`, `audio_url`, `cover_url`)
+4. **`category_songs`**: Junction table for Many-to-Many relationship between Categories and Songs with playlist `sort_order`.
 
 ---
 
-# 🎵 Music & Media Rights
+## ⚡ API Endpoints
 
-Nostalgic Moments does not grant rights to third-party music, artwork, images, videos, or other media.
-
-All production media must be:
-
-* Owned by the platform owner, or
-* Properly licensed, or
-* Used under an applicable legal permission or license.
-
-Third-party copyrighted music must not be uploaded or distributed without the necessary rights.
-
-The software license for this repository does **not** grant permission to use any third-party music or media included in a deployment.
+- `GET /api/health` — System status & database connectivity check
+- `POST /api/auth/login` — Administrator authentication & JWT token generation
+- `GET /api/auth/me` — Authenticated admin profile
+- `GET /api/categories` — List all active nostalgic categories / experiences
+- `GET /api/categories/{slug}` — Retrieve specific category with playlist
+- `POST /api/categories` — Create category (Admin only)
+- `PUT /api/categories/{id}` — Update category (Admin only)
+- `DELETE /api/categories/{id}` — Delete category (Admin only)
+- `GET /api/songs` — List all songs
+- `POST /api/songs` — Add song & assign to category (Admin only)
+- `PUT /api/songs/{id}` — Update song details (Admin only)
+- `DELETE /api/songs/{id}` — Delete song (Admin only)
+- `POST /api/uploads/audio` — Upload audio media asset (Admin only)
+- `POST /api/uploads/image` — Upload image asset (Admin only)
 
 ---
 
-# 📜 License
+## 🎵 Music & Media Rights
 
-The source code of Nostalgic Moments is **not licensed for unrestricted redistribution or commercial reuse** unless explicitly permitted by the copyright holder.
+Nostalgic Moments does not grant rights to third-party music, artwork, images, videos, or other media. All production media must be owned by the platform owner, properly licensed, or used under applicable permissions.
+
+---
+
+## 📜 License
 
 Copyright and licensing terms for the software are defined in the repository's `LICENSE` file.
 
-Music, artwork, photographs, videos, trademarks, and other third-party assets are governed by their respective rights and licenses and are not automatically covered by the software license.
-
 ---
 
-# 👨‍💻 Author
+## 👨‍💻 Author
 
 **Arka Maitra**
-
----
-
-## 🎵 Nostalgic Moments
-
-**Step into a memory. Press play.**
-
