@@ -168,14 +168,22 @@ export default function AdminCategoriesPage() {
 
   const uploadAmbientAudio = async (file: File) => {
     setUploadingAmbientAudio(true);
+    setError(null);
     try {
       const data = await uploadAudioFile(file);
+      const cleanName = file.name.replace(/\.[^/.]+$/, "").replace(/[_-]+/g, " ");
+      const formattedName = cleanName.charAt(0).toUpperCase() + cleanName.slice(1);
+
       setForm((f) => ({
         ...f,
         theme_config: {
           ...f.theme_config,
           ambient_sound_type: "custom_url",
           ambient_sound_url: data.url,
+          ambient_sound_name: f.theme_config?.ambient_sound_name || formattedName,
+          ambient_sound_description:
+            f.theme_config?.ambient_sound_description ||
+            `Custom ${formattedName} environmental loop`,
         },
       }));
     } catch (e: any) {
@@ -187,6 +195,7 @@ export default function AdminCategoriesPage() {
 
   const autoSlug = (name: string) =>
     name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+
 
 
   return (
@@ -503,17 +512,115 @@ export default function AdminCategoriesPage() {
                 </div>
               </div>
 
-              {/* 🎧 Environment Ambient Sound Configuration */}
-              <div className="p-4 rounded-2xl bg-slate-800/60 border border-slate-700/80 space-y-4">
-                <div className="flex items-center gap-2 text-amber-300">
-                  <Wind className="w-4 h-4" />
-                  <h3 className="text-sm font-serif font-semibold">Environment Ambient Sound</h3>
+              {/* 🎧 Environment Ambient Sound Configuration & Upload */}
+              <div className="p-5 rounded-2xl bg-slate-800/70 border border-slate-700/80 space-y-4">
+                <div className="flex items-center justify-between pb-2 border-b border-slate-700/60">
+                  <div className="flex items-center gap-2 text-amber-300">
+                    <Wind className="w-4 h-4" />
+                    <h3 className="text-sm font-serif font-semibold">Environment Ambient Sound & Audio Upload</h3>
+                  </div>
+                  {form.theme_config?.ambient_sound_url && (
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                      Audio Attached
+                    </span>
+                  )}
+                </div>
+
+                {/* Direct Ambient Audio File Upload Card */}
+                <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-700 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-medium text-amber-200 uppercase tracking-wider flex items-center gap-1.5">
+                      <Music className="w-3.5 h-3.5 text-amber-400" /> Upload Custom Ambient Sound File (.mp3, .wav, .ogg)
+                    </label>
+                    <span className="text-[10px] text-slate-400 font-mono">Max 50MB</span>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => ambientAudioRef.current?.click()}
+                      disabled={uploadingAmbientAudio}
+                      className="px-5 py-2.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-200 text-xs font-semibold transition flex items-center justify-center gap-2 shrink-0 shadow-sm"
+                    >
+                      {uploadingAmbientAudio ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin text-amber-400" />
+                          <span>Uploading Audio...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Music className="w-4 h-4 text-amber-400" />
+                          <span>Choose Ambient Audio File</span>
+                        </>
+                      )}
+                    </button>
+                    <input
+                      ref={ambientAudioRef}
+                      type="file"
+                      accept="audio/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) uploadAmbientAudio(f);
+                      }}
+                    />
+
+                    <input
+                      type="text"
+                      value={form.theme_config?.ambient_sound_url ?? ""}
+                      onChange={(e) =>
+                        setForm((f) => ({
+                          ...f,
+                          theme_config: {
+                            ...f.theme_config,
+                            ambient_sound_type: e.target.value ? "custom_url" : f.theme_config?.ambient_sound_type,
+                            ambient_sound_url: e.target.value,
+                          },
+                        }))
+                      }
+                      placeholder="Or paste direct audio URL (https://...)"
+                      className="flex-1 px-3.5 py-2 bg-slate-800 border border-slate-700 rounded-xl text-slate-100 text-xs font-mono focus:outline-none focus:border-amber-500 transition"
+                    />
+                  </div>
+
+                  {/* Audio Player Preview if file attached */}
+                  {form.theme_config?.ambient_sound_url && (
+                    <div className="p-3 rounded-xl bg-black/40 border border-slate-700/60 space-y-2 animate-fadeIn">
+                      <div className="flex items-center justify-between text-xs text-slate-300">
+                        <span className="font-mono text-[11px] text-amber-300 truncate max-w-[280px]">
+                          Preview: {form.theme_config.ambient_sound_name || "Uploaded Ambient Track"}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setForm((f) => ({
+                              ...f,
+                              theme_config: {
+                                ...f.theme_config,
+                                ambient_sound_type: "auto",
+                                ambient_sound_url: "",
+                                ambient_sound_name: "",
+                              },
+                            }))
+                          }
+                          className="text-[10px] text-rose-400 hover:text-rose-300 font-mono underline"
+                        >
+                          Remove Audio
+                        </button>
+                      </div>
+                      <audio
+                        src={form.theme_config.ambient_sound_url}
+                        controls
+                        className="w-full h-8 accent-amber-500 rounded"
+                      />
+                    </div>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <label className="text-xs font-medium text-slate-300 uppercase tracking-wider">
-                      Ambient Sound Preset
+                      Sound Preset Mode
                     </label>
                     <select
                       value={form.theme_config?.ambient_sound_type ?? "auto"}
@@ -529,13 +636,13 @@ export default function AdminCategoriesPage() {
                       className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-slate-100 text-sm focus:outline-none focus:border-amber-500 transition"
                     >
                       <option value="auto">Auto (Match Environment Slug)</option>
-                      <option value="bus">🚌 Bus Engine & Road Breeze</option>
-                      <option value="car_rain">🚗 Rain on Windshield (Midnight Drive)</option>
-                      <option value="chai">🫖 Chai Tapri Murmur & Kettle</option>
-                      <option value="salon">💈 Salon Acoustics & Cassette Hiss</option>
-                      <option value="train">🚂 Railway Platform & Track Rhythm</option>
-                      <option value="vinyl">📻 Vintage Vinyl Crackle & Needle</option>
-                      <option value="custom_url">🔗 Custom Streaming Audio URL / MP3</option>
+                      <option value="custom_url">🔗 Custom Uploaded Audio Track</option>
+                      <option value="bus">🚌 Bus Engine & Road Breeze (Procedural)</option>
+                      <option value="car_rain">🚗 Rain on Windshield (Procedural)</option>
+                      <option value="chai">🫖 Chai Tapri Murmur & Kettle (Procedural)</option>
+                      <option value="salon">💈 Salon Acoustics & Cassette (Procedural)</option>
+                      <option value="train">🚂 Railway Platform & Track (Procedural)</option>
+                      <option value="vinyl">📻 Vintage Vinyl Warmth (Procedural)</option>
                       <option value="off">🚫 Disabled / Muted by Default</option>
                     </select>
                   </div>
@@ -569,7 +676,7 @@ export default function AdminCategoriesPage() {
 
                 <div className="space-y-1.5">
                   <label className="text-xs font-medium text-slate-300 uppercase tracking-wider">
-                    Custom Ambient Sound Label (Optional)
+                    Custom Ambient Sound Display Label
                   </label>
                   <input
                     type="text"
@@ -583,60 +690,12 @@ export default function AdminCategoriesPage() {
                         },
                       }))
                     }
-                    placeholder="e.g. Old Kolkata Tram & Rain Atmosphere"
+                    placeholder="e.g. Vintage Roadways Bus Engine & Horn"
                     className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-slate-100 text-sm focus:outline-none focus:border-amber-500 transition"
                   />
                 </div>
-
-                {/* Custom Audio URL / Upload if custom_url selected */}
-                {form.theme_config?.ambient_sound_type === "custom_url" && (
-                  <div className="space-y-1.5 animate-fadeIn">
-                    <label className="text-xs font-medium text-amber-300 uppercase tracking-wider">
-                      Custom Ambient Loop Audio File / URL *
-                    </label>
-                    <div className="flex items-center gap-3">
-                      <input
-                        type="text"
-                        value={form.theme_config?.ambient_sound_url ?? ""}
-                        onChange={(e) =>
-                          setForm((f) => ({
-                            ...f,
-                            theme_config: {
-                              ...f.theme_config,
-                              ambient_sound_url: e.target.value,
-                            },
-                          }))
-                        }
-                        placeholder="https://... ambient loop MP3"
-                        className="flex-1 px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-slate-100 text-sm focus:outline-none focus:border-amber-500 transition"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => ambientAudioRef.current?.click()}
-                        disabled={uploadingAmbientAudio}
-                        className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-sm transition flex items-center gap-2 shrink-0"
-                      >
-                        {uploadingAmbientAudio ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : (
-                          <Music className="w-4 h-4" />
-                        )}
-                        Upload Loop
-                      </button>
-                      <input
-                        ref={ambientAudioRef}
-                        type="file"
-                        accept="audio/*"
-                        className="hidden"
-                        onChange={(e) => {
-                          const f = e.target.files?.[0];
-                          if (f) uploadAmbientAudio(f);
-                        }}
-                      />
-                    </div>
-                  </div>
-                )}
               </div>
+
 
               {/* Sort Order & Active Toggle */}
               <div className="grid grid-cols-2 gap-4">
