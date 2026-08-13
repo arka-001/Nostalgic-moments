@@ -5,6 +5,8 @@ import Link from "next/link";
 import { CategoryDetail } from "@/types";
 import { useAudioPlayer } from "@/hooks/useAudioPlayer";
 import { ambientEngine, AmbientType } from "@/lib/ambientSoundscapes";
+import { trackPlaybackEvent } from "@/lib/api";
+
 import {
   ArrowLeft, Radio, Music, Play, Pause, SkipBack, SkipForward,
   Volume2, Volume1, VolumeX, Shuffle, Repeat, Repeat1, ListMusic, ChevronDown,
@@ -171,6 +173,24 @@ export default function ExperienceClient({ category }: ExperienceClientProps) {
   };
 
   const hasSongs = category.songs.length > 0;
+
+  // Track playback analytics
+  const lastTrackedSongId = useRef<string | null>(null);
+  useEffect(() => {
+    if (currentSong && isPlaying && lastTrackedSongId.current !== currentSong.id) {
+      lastTrackedSongId.current = currentSong.id;
+      trackPlaybackEvent({
+        event_type: "play",
+        category_slug: category.slug,
+        category_name: category.name,
+        song_id: currentSong.id,
+        song_title: currentSong.title,
+        song_artist: currentSong.artist,
+        duration_listened: currentSong.duration || 180,
+      });
+    }
+  }, [currentSong, isPlaying, category.slug, category.name]);
+
 
 
   const rawOpacity = category.theme_config?.player_transparency ?? 10;

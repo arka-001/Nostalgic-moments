@@ -7,7 +7,9 @@ import {
   AuthResponse,
   FileUploadResponse,
   CategorySongOrderItem,
+  AnalyticsOverviewResponse,
 } from "../types";
+
 
 export const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -268,4 +270,30 @@ export async function uploadImageFile(
     body: formData,
   });
 }
+
+// --- Analytics APIs ---
+export async function trackPlaybackEvent(data: {
+  event_type?: string;
+  category_slug?: string;
+  category_name?: string;
+  song_id?: string;
+  song_title?: string;
+  song_artist?: string;
+  duration_listened?: number;
+}): Promise<void> {
+  try {
+    await fetch(`${API_BASE_URL}/api/analytics/track`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+  } catch (_) {
+    // Silent fail for non-blocking telemetry
+  }
+}
+
+export async function fetchAnalyticsOverview(): Promise<AnalyticsOverviewResponse> {
+  return apiFetch<AnalyticsOverviewResponse>("/api/analytics/admin/overview");
+}
+
 

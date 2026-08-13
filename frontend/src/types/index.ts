@@ -103,6 +103,42 @@ export interface FileUploadResponse {
   size: number;
 }
 
+export interface EnvironmentPlayStats {
+  slug: string;
+  name: string;
+  play_count: number;
+  percentage: number;
+}
+
+export interface SongPlayStats {
+  id?: string;
+  title: string;
+  artist: string;
+  play_count: number;
+  total_duration_listened: number;
+}
+
+export interface DailyListeningTrend {
+  date: string;
+  plays: number;
+  hours: number;
+}
+
+export interface HourlyListeningTrend {
+  hour: number;
+  label: string;
+  plays: number;
+}
+
+export interface AnalyticsOverviewResponse {
+  total_plays: number;
+  total_listening_hours: number;
+  top_environments: EnvironmentPlayStats[];
+  top_songs: SongPlayStats[];
+  daily_trends: DailyListeningTrend[];
+  hourly_trends: HourlyListeningTrend[];
+}
+
 export type RepeatMode = "off" | "all" | "one";
 
 export interface AudioPlayerState {
@@ -118,4 +154,6 @@ export interface AudioPlayerState {
   currentIndex: number;
   isFullscreen: boolean;
 }
+
+
 
