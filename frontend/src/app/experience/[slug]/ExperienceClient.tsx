@@ -42,26 +42,70 @@ export default function ExperienceClient({ category }: ExperienceClientProps) {
   const [bgLoaded, setBgLoaded] = useState(false);
   const [retroFilter, setRetroFilter] = useState(false);
 
-  // Determine initial ambient type based on category slug
-  const getDefaultAmbient = (): AmbientType => {
-    if (category.slug.includes("bus")) return "bus";
-    if (category.slug.includes("car")) return "car_rain";
-    if (category.slug.includes("tea") || category.slug.includes("chai")) return "chai";
-    if (category.slug.includes("salon")) return "salon";
-    if (category.slug.includes("train") || category.slug.includes("railway")) return "train";
-    return "vinyl";
+  // Get environment-specific ambient preset
+  const getCategoryAmbientConfig = () => {
+    const slug = category.slug.toLowerCase();
+    if (slug.includes("bus")) {
+      return {
+        type: "bus" as AmbientType,
+        name: "Bus Engine & Road Breeze",
+        description: "Low-frequency engine hum & open-window air",
+        icon: Wind,
+      };
+    }
+    if (slug.includes("car")) {
+      return {
+        type: "car_rain" as AmbientType,
+        name: "Rain on Windshield",
+        description: "Gentle rain on glass & quiet highway drone",
+        icon: CloudRain,
+      };
+    }
+    if (slug.includes("tea") || slug.includes("chai")) {
+      return {
+        type: "chai" as AmbientType,
+        name: "Chai Stall Atmosphere",
+        description: "Roadside chatter & warm kettle ambience",
+        icon: Coffee,
+      };
+    }
+    if (slug.includes("salon")) {
+      return {
+        type: "salon" as AmbientType,
+        name: "Salon Acoustics & Cassette",
+        description: "Vintage salon room tone & tape hiss",
+        icon: Scissors,
+      };
+    }
+    if (slug.includes("train") || slug.includes("railway")) {
+      return {
+        type: "train" as AmbientType,
+        name: "Railway Platform & Tracks",
+        description: "Platform echoes & rhythmic track clicks",
+        icon: Train,
+      };
+    }
+    return {
+      type: "vinyl" as AmbientType,
+      name: "Vintage Vinyl Warmth",
+      description: "Warm analog vinyl needle & dust texture",
+      icon: Disc,
+    };
   };
 
-  const [ambientType, setAmbientType] = useState<AmbientType>("off");
+  const envAmbient = getCategoryAmbientConfig();
+  const [ambientEnabled, setAmbientEnabled] = useState<boolean>(true);
   const [ambientVolume, setAmbientVolume] = useState<number>(0.25);
 
-  // Initialize and clean up ambient audio
+  // Initialize and clean up ambient audio specifically for this category
   useEffect(() => {
-    const defaultType = getDefaultAmbient();
-    setAmbientType(defaultType);
     if (ambientEngine) {
-      ambientEngine.play(defaultType);
-      ambientEngine.setVolume(ambientVolume);
+      if (ambientEnabled) {
+        ambientEngine.play(envAmbient.type);
+        ambientEngine.setVolume(ambientVolume);
+      } else {
+        ambientEngine.stop();
+      }
     }
     return () => {
       if (ambientEngine) {
@@ -69,23 +113,30 @@ export default function ExperienceClient({ category }: ExperienceClientProps) {
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [category.slug]);
+  }, [category.slug, ambientEnabled]);
 
-  const handleAmbientChange = (type: AmbientType) => {
-    setAmbientType(type);
+  const handleToggleAmbient = () => {
+    const nextState = !ambientEnabled;
+    setAmbientEnabled(nextState);
     if (ambientEngine) {
-      ambientEngine.play(type);
+      if (nextState) {
+        ambientEngine.play(envAmbient.type);
+        ambientEngine.setVolume(ambientVolume);
+      } else {
+        ambientEngine.stop();
+      }
     }
   };
 
   const handleAmbientVolumeChange = (vol: number) => {
     setAmbientVolume(vol);
-    if (ambientEngine) {
+    if (ambientEngine && ambientEnabled) {
       ambientEngine.setVolume(vol);
     }
   };
 
   const hasSongs = category.songs.length > 0;
+
 
   const rawOpacity = category.theme_config?.player_transparency ?? 10;
   const playerOpacity = Math.min(90, Math.max(8, rawOpacity)) / 100;
@@ -193,15 +244,7 @@ export default function ExperienceClient({ category }: ExperienceClientProps) {
     setMouseOffset({ x, y });
   };
 
-  const ambientOptions: { type: AmbientType; label: string; icon: typeof Wind }[] = [
-    { type: "bus", label: "Bus Engine", icon: Wind },
-    { type: "car_rain", label: "Midnight Rain", icon: CloudRain },
-    { type: "chai", label: "Chai Tapri Murmur", icon: Coffee },
-    { type: "salon", label: "Vintage Salon Tone", icon: Scissors },
-    { type: "train", label: "Train Rhythm", icon: Train },
-    { type: "vinyl", label: "Vinyl Crackle", icon: Disc },
-    { type: "off", label: "Mute Ambient", icon: VolumeX },
-  ];
+
 
   return (
     <div
@@ -285,70 +328,73 @@ export default function ExperienceClient({ category }: ExperienceClientProps) {
             <button
               onClick={() => setShowAmbientControls((v) => !v)}
               className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full border text-xs font-mono backdrop-blur-xl transition shadow-md ${
-                ambientType !== "off"
+                ambientEnabled
                   ? "bg-amber-500/20 border-amber-400/50 text-amber-300"
                   : "bg-black/25 border-white/20 text-slate-300 hover:text-white"
               }`}
-              title="Configure Atmospheric Ambient Soundscapes"
+              title={`Configure ${envAmbient.name}`}
             >
-              <Wind className={`w-3.5 h-3.5 text-amber-400 ${ambientType !== "off" ? "animate-pulse" : ""}`} />
+              <envAmbient.icon className={`w-3.5 h-3.5 text-amber-400 ${ambientEnabled ? "animate-pulse" : ""}`} />
               <span className="hidden sm:inline">
-                {ambientType === "off" ? "Ambient: Off" : `Ambient: ${ambientType.replace("_", " ")}`}
+                {ambientEnabled ? `${envAmbient.name}` : "Ambient: Off"}
               </span>
-              <span className="sm:hidden">Ambient</span>
+              <span className="sm:hidden">{ambientEnabled ? "Ambient On" : "Ambient Off"}</span>
             </button>
 
-            {/* Ambient Soundscape Drawer */}
+            {/* Environment-Specific Ambient Soundscape Drawer */}
             {showAmbientControls && (
-              <div className="absolute right-0 top-10 mt-2 w-64 p-4 rounded-2xl bg-black/75 border border-white/20 backdrop-blur-2xl shadow-2xl z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+              <div className="absolute right-0 top-10 mt-2 w-72 p-4 rounded-2xl bg-black/85 border border-white/20 backdrop-blur-2xl shadow-2xl z-50 animate-in fade-in slide-in-from-top-2 duration-200">
                 <div className="flex items-center justify-between pb-3 border-b border-white/10 mb-3">
                   <span className="text-xs font-semibold uppercase tracking-wider text-amber-300 font-mono flex items-center gap-1.5">
-                    <Sliders className="w-3.5 h-3.5" /> Ambient Sound
+                    <envAmbient.icon className="w-3.5 h-3.5" /> {envAmbient.name}
                   </span>
                   <span className="text-[10px] font-mono text-slate-400">
-                    {Math.round(ambientVolume * 100)}% Vol
+                    {ambientEnabled ? `${Math.round(ambientVolume * 100)}% Vol` : "Muted"}
                   </span>
                 </div>
 
+                <p className="text-[11px] text-slate-300 font-sans mb-3 leading-relaxed">
+                  {envAmbient.description}
+                </p>
+
+                {/* On / Off Toggle Switch */}
+                <div className="flex items-center justify-between p-2 rounded-xl bg-white/5 border border-white/10 mb-3">
+                  <span className="text-xs text-slate-200 font-medium">Ambient Audio</span>
+                  <button
+                    onClick={handleToggleAmbient}
+                    className={`px-3 py-1 rounded-full text-xs font-mono font-semibold transition ${
+                      ambientEnabled
+                        ? "bg-amber-500 text-black shadow-sm"
+                        : "bg-white/10 text-slate-400 hover:text-slate-200"
+                    }`}
+                  >
+                    {ambientEnabled ? "ENABLED" : "MUTED"}
+                  </button>
+                </div>
+
                 {/* Ambient Volume Slider */}
-                <div className="mb-3 flex items-center gap-2">
-                  <Volume2 className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-[11px] font-mono text-slate-400">
+                    <span className="flex items-center gap-1">
+                      <Volume2 className="w-3 h-3 text-amber-400" /> Volume
+                    </span>
+                    <span>{Math.round(ambientVolume * 100)}%</span>
+                  </div>
                   <input
                     type="range"
                     min={0}
                     max={1}
                     step={0.02}
-                    value={ambientType === "off" ? 0 : ambientVolume}
-                    disabled={ambientType === "off"}
+                    value={ambientEnabled ? ambientVolume : 0}
+                    disabled={!ambientEnabled}
                     onChange={(e) => handleAmbientVolumeChange(parseFloat(e.target.value))}
                     className="w-full h-1.5 accent-amber-400 bg-white/20 rounded-lg cursor-pointer disabled:opacity-30"
                   />
                 </div>
-
-                {/* Ambient Presets Grid */}
-                <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
-                  {ambientOptions.map((opt) => {
-                    const isSelected = ambientType === opt.type;
-                    const Icon = opt.icon;
-                    return (
-                      <button
-                        key={opt.type}
-                        onClick={() => handleAmbientChange(opt.type)}
-                        className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl text-xs transition text-left ${
-                          isSelected
-                            ? "bg-amber-500/20 text-amber-200 border border-amber-400/40 font-medium"
-                            : "hover:bg-white/10 text-slate-300"
-                        }`}
-                      >
-                        <Icon className={`w-3.5 h-3.5 ${isSelected ? "text-amber-400" : "text-slate-400"}`} />
-                        <span className="truncate">{opt.label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
               </div>
             )}
           </div>
+
 
           <div className="text-right">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-black/25 border border-amber-400/30 text-amber-300 text-xs font-mono backdrop-blur-xl shadow-md">
