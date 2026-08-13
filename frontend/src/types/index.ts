@@ -17,7 +17,13 @@ export interface ThemeConfig {
     | "vintage_dashboard"
     | "railway_announcer";
   player_transparency?: number; // 0 to 100 opacity percentage
+  ambient_sound_type?: "auto" | "bus" | "car_rain" | "chai" | "salon" | "train" | "vinyl" | "custom_url" | "off";
+  ambient_sound_name?: string;
+  ambient_sound_description?: string;
+  ambient_sound_url?: string;
+  ambient_default_volume?: number; // 0 to 100
 }
+
 
 export interface Category {
   id: string;

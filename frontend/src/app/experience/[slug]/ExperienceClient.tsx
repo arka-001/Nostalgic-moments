@@ -42,66 +42,100 @@ export default function ExperienceClient({ category }: ExperienceClientProps) {
   const [bgLoaded, setBgLoaded] = useState(false);
   const [retroFilter, setRetroFilter] = useState(false);
 
-  // Get environment-specific ambient preset
+  // Get environment-specific ambient preset (Admin customizable via CMS)
   const getCategoryAmbientConfig = () => {
+    const adminType = category.theme_config?.ambient_sound_type;
+    const adminName = category.theme_config?.ambient_sound_name;
+    const adminDesc = category.theme_config?.ambient_sound_description;
+    const adminUrl = category.theme_config?.ambient_sound_url;
+    const adminVol = category.theme_config?.ambient_default_volume;
+
     const slug = category.slug.toLowerCase();
-    if (slug.includes("bus")) {
-      return {
-        type: "bus" as AmbientType,
-        name: "Bus Engine & Road Breeze",
-        description: "Low-frequency engine hum & open-window air",
-        icon: Wind,
-      };
+    let soundType: AmbientType = "vinyl";
+    let defaultName = "Vintage Vinyl Warmth";
+    let defaultDesc = "Warm analog vinyl needle & dust texture";
+    let Icon = Disc;
+
+    if (adminType && adminType !== "auto") {
+      soundType = adminType;
+      if (soundType === "bus") {
+        defaultName = "Bus Engine & Road Breeze";
+        defaultDesc = "Low-frequency engine hum & open-window air";
+        Icon = Wind;
+      } else if (soundType === "car_rain") {
+        defaultName = "Rain on Windshield";
+        defaultDesc = "Gentle rain on glass & quiet highway drone";
+        Icon = CloudRain;
+      } else if (soundType === "chai") {
+        defaultName = "Chai Stall Atmosphere";
+        defaultDesc = "Roadside chatter & warm kettle ambience";
+        Icon = Coffee;
+      } else if (soundType === "salon") {
+        defaultName = "Salon Acoustics & Cassette";
+        defaultDesc = "Vintage salon room tone & tape hiss";
+        Icon = Scissors;
+      } else if (soundType === "train") {
+        defaultName = "Railway Platform & Tracks";
+        defaultDesc = "Platform echoes & rhythmic track clicks";
+        Icon = Train;
+      } else if (soundType === "custom_url") {
+        defaultName = "Custom Atmosphere Loop";
+        defaultDesc = "Streaming custom ambient audio track";
+        Icon = Music;
+      } else if (soundType === "off") {
+        defaultName = "Ambient Muted";
+        defaultDesc = "Ambient sound disabled for this environment";
+        Icon = VolumeX;
+      }
+    } else {
+      if (slug.includes("bus")) {
+        soundType = "bus";
+        defaultName = "Bus Engine & Road Breeze";
+        defaultDesc = "Low-frequency engine hum & open-window air";
+        Icon = Wind;
+      } else if (slug.includes("car")) {
+        soundType = "car_rain";
+        defaultName = "Rain on Windshield";
+        defaultDesc = "Gentle rain on glass & quiet highway drone";
+        Icon = CloudRain;
+      } else if (slug.includes("tea") || slug.includes("chai")) {
+        soundType = "chai";
+        defaultName = "Chai Stall Atmosphere";
+        defaultDesc = "Roadside chatter & warm kettle ambience";
+        Icon = Coffee;
+      } else if (slug.includes("salon")) {
+        soundType = "salon";
+        defaultName = "Salon Acoustics & Cassette";
+        defaultDesc = "Vintage salon room tone & tape hiss";
+        Icon = Scissors;
+      } else if (slug.includes("train") || slug.includes("railway")) {
+        soundType = "train";
+        defaultName = "Railway Platform & Tracks";
+        defaultDesc = "Platform echoes & rhythmic track clicks";
+        Icon = Train;
+      }
     }
-    if (slug.includes("car")) {
-      return {
-        type: "car_rain" as AmbientType,
-        name: "Rain on Windshield",
-        description: "Gentle rain on glass & quiet highway drone",
-        icon: CloudRain,
-      };
-    }
-    if (slug.includes("tea") || slug.includes("chai")) {
-      return {
-        type: "chai" as AmbientType,
-        name: "Chai Stall Atmosphere",
-        description: "Roadside chatter & warm kettle ambience",
-        icon: Coffee,
-      };
-    }
-    if (slug.includes("salon")) {
-      return {
-        type: "salon" as AmbientType,
-        name: "Salon Acoustics & Cassette",
-        description: "Vintage salon room tone & tape hiss",
-        icon: Scissors,
-      };
-    }
-    if (slug.includes("train") || slug.includes("railway")) {
-      return {
-        type: "train" as AmbientType,
-        name: "Railway Platform & Tracks",
-        description: "Platform echoes & rhythmic track clicks",
-        icon: Train,
-      };
-    }
+
     return {
-      type: "vinyl" as AmbientType,
-      name: "Vintage Vinyl Warmth",
-      description: "Warm analog vinyl needle & dust texture",
-      icon: Disc,
+      type: soundType,
+      name: adminName && adminName.trim() ? adminName.trim() : defaultName,
+      description: adminDesc && adminDesc.trim() ? adminDesc.trim() : defaultDesc,
+      customUrl: adminUrl,
+      defaultVolume: typeof adminVol === "number" ? adminVol / 100 : 0.25,
+      icon: Icon,
+      isOffByDefault: soundType === "off",
     };
   };
 
   const envAmbient = getCategoryAmbientConfig();
-  const [ambientEnabled, setAmbientEnabled] = useState<boolean>(true);
-  const [ambientVolume, setAmbientVolume] = useState<number>(0.25);
+  const [ambientEnabled, setAmbientEnabled] = useState<boolean>(!envAmbient.isOffByDefault);
+  const [ambientVolume, setAmbientVolume] = useState<number>(envAmbient.defaultVolume);
 
   // Initialize and clean up ambient audio specifically for this category
   useEffect(() => {
     if (ambientEngine) {
-      if (ambientEnabled) {
-        ambientEngine.play(envAmbient.type);
+      if (ambientEnabled && envAmbient.type !== "off") {
+        ambientEngine.play(envAmbient.type, envAmbient.customUrl);
         ambientEngine.setVolume(ambientVolume);
       } else {
         ambientEngine.stop();
@@ -113,20 +147,21 @@ export default function ExperienceClient({ category }: ExperienceClientProps) {
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [category.slug, ambientEnabled]);
+  }, [category.slug, ambientEnabled, envAmbient.type, envAmbient.customUrl]);
 
   const handleToggleAmbient = () => {
     const nextState = !ambientEnabled;
     setAmbientEnabled(nextState);
     if (ambientEngine) {
-      if (nextState) {
-        ambientEngine.play(envAmbient.type);
+      if (nextState && envAmbient.type !== "off") {
+        ambientEngine.play(envAmbient.type, envAmbient.customUrl);
         ambientEngine.setVolume(ambientVolume);
       } else {
         ambientEngine.stop();
       }
     }
   };
+
 
   const handleAmbientVolumeChange = (vol: number) => {
     setAmbientVolume(vol);

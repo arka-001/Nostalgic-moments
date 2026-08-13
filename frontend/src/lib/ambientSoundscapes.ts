@@ -1,22 +1,25 @@
 /**
  * Procedural Web Audio Ambient Soundscapes for Nostalgic Moments
  * Generates continuous, realistic analog background textures (Bus rumble, rain, chai stall, salon scissors, station)
- * with zero network overhead.
+ * or plays custom streaming ambient audio loops with master volume control.
  */
 
-export type AmbientType = "bus" | "chai" | "salon" | "car_rain" | "train" | "vinyl" | "off";
+export type AmbientType = "auto" | "bus" | "chai" | "salon" | "car_rain" | "train" | "vinyl" | "custom_url" | "off";
 
 class AmbientAudioEngine {
   private ctx: AudioContext | null = null;
   private masterGain: GainNode | null = null;
   private nodes: (AudioNode | number)[] = [];
+  private customAudio: HTMLAudioElement | null = null;
   private isRunning: boolean = false;
   private currentType: AmbientType = "off";
   private currentVolume: number = 0.25;
 
   private initContext() {
     if (!this.ctx) {
-      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      const AudioCtx =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       this.ctx = new AudioCtx();
       this.masterGain = this.ctx.createGain();
       this.masterGain.gain.setValueAtTime(this.currentVolume, this.ctx.currentTime);
@@ -36,7 +39,7 @@ class AmbientAudioEngine {
     for (let i = 0; i < bufferSize; i++) {
       const white = Math.random() * 2 - 1;
       // Brown / Pink noise approximation for warm organic textures
-      data[i] = (lastOut + (0.02 * white)) / 1.02;
+      data[i] = (lastOut + 0.02 * white) / 1.02;
       lastOut = data[i];
       data[i] *= 3.5;
     }
@@ -47,6 +50,9 @@ class AmbientAudioEngine {
     this.currentVolume = Math.max(0, Math.min(1, volume));
     if (this.masterGain && this.ctx) {
       this.masterGain.gain.setTargetAtTime(this.currentVolume, this.ctx.currentTime, 0.05);
+    }
+    if (this.customAudio) {
+      this.customAudio.volume = this.currentVolume;
     }
   }
 
@@ -64,28 +70,52 @@ class AmbientAudioEngine {
       }
     });
     this.nodes = [];
+
+    if (this.customAudio) {
+      try {
+        this.customAudio.pause();
+        this.customAudio.src = "";
+      } catch (_) {}
+      this.customAudio = null;
+    }
+
     this.isRunning = false;
     this.currentType = "off";
   }
 
-  public play(type: AmbientType) {
+  public play(type: AmbientType, customUrl?: string) {
     if (type === "off") {
       this.stop();
       return;
     }
 
-    this.initContext();
-    if (!this.ctx || !this.masterGain) return;
-
     this.stop();
     this.currentType = type;
     this.isRunning = true;
+
+    // 1. Custom URL loop audio playback
+    if (type === "custom_url" && customUrl) {
+      try {
+        this.customAudio = new Audio(customUrl);
+        this.customAudio.loop = true;
+        this.customAudio.volume = this.currentVolume;
+        this.customAudio.play().catch((e) => {
+          console.warn("Autoplay prevented on ambient custom audio:", e);
+        });
+      } catch (err) {
+        console.error("Failed to load custom ambient sound:", err);
+      }
+      return;
+    }
+
+    // 2. Procedural Web Audio synthesis
+    this.initContext();
+    if (!this.ctx || !this.masterGain) return;
 
     const noiseBuffer = this.createNoiseBuffer();
 
     switch (type) {
       case "bus": {
-        // Deep engine lowpass rumble + highway breeze
         const noiseSource = this.ctx.createBufferSource();
         noiseSource.buffer = noiseBuffer;
         noiseSource.loop = true;
@@ -96,7 +126,7 @@ class AmbientAudioEngine {
 
         const osc = this.ctx.createOscillator();
         osc.type = "triangle";
-        osc.frequency.setValueAtTime(48, this.ctx.currentTime); // 48Hz engine idle
+        osc.frequency.setValueAtTime(48, this.ctx.currentTime);
 
         const oscGain = this.ctx.createGain();
         oscGain.gain.setValueAtTime(0.15, this.ctx.currentTime);
@@ -113,7 +143,6 @@ class AmbientAudioEngine {
       }
 
       case "car_rain": {
-        // Raindrops on windshield + smooth night breeze
         const rainSource = this.ctx.createBufferSource();
         rainSource.buffer = noiseBuffer;
         rainSource.loop = true;
@@ -143,7 +172,6 @@ class AmbientAudioEngine {
       }
 
       case "chai": {
-        // Roadside ambient murmur & warm hum
         const chaiSource = this.ctx.createBufferSource();
         chaiSource.buffer = noiseBuffer;
         chaiSource.loop = true;
@@ -161,7 +189,6 @@ class AmbientAudioEngine {
       }
 
       case "salon": {
-        // Room tone + subtle cassette tape hiss
         const hissSource = this.ctx.createBufferSource();
         hissSource.buffer = noiseBuffer;
         hissSource.loop = true;
@@ -182,7 +209,6 @@ class AmbientAudioEngine {
       }
 
       case "train": {
-        // Train track rhythm click-clack + platform low rumble
         const trackSource = this.ctx.createBufferSource();
         trackSource.buffer = noiseBuffer;
         trackSource.loop = true;
@@ -195,7 +221,6 @@ class AmbientAudioEngine {
         trainFilter.connect(this.masterGain);
         trackSource.start();
 
-        // Rhythmic track accent pulse
         const trackPulseGain = this.ctx.createGain();
         trackPulseGain.gain.setValueAtTime(0.0, this.ctx.currentTime);
 
@@ -222,7 +247,6 @@ class AmbientAudioEngine {
       }
 
       case "vinyl": {
-        // Classic vinyl crackle & dust pops
         const vinylSource = this.ctx.createBufferSource();
         vinylSource.buffer = noiseBuffer;
         vinylSource.loop = true;
