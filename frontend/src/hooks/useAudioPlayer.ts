@@ -40,6 +40,7 @@ export function useAudioPlayer(initialSongs: Song[] = []) {
   useEffect(() => {
     const audio = new Audio();
     audio.preload = "auto";
+    audio.crossOrigin = "anonymous";
     audioRef.current = audio;
 
     const handleTimeUpdate = () => setCurrentTime(audio.currentTime);
@@ -61,6 +62,20 @@ export function useAudioPlayer(initialSongs: Song[] = []) {
       audio.removeEventListener("ended", handleEnded);
     };
   }, []);
+
+  // Sync MediaSession API (Lock screen, notifications, bluetooth devices)
+  useEffect(() => {
+    if (typeof window !== "undefined" && "mediaSession" in navigator && currentSong) {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: currentSong.title,
+        artist: currentSong.artist,
+        album: currentSong.album || "Nostalgic Moments",
+        artwork: currentSong.cover_url
+          ? [{ src: currentSong.cover_url, sizes: "512x512", type: "image/jpeg" }]
+          : [],
+      });
+    }
+  }, [currentSong]);
 
   // Generate shuffle sequence with currently active track at index 0
   const buildShuffleSequence = useCallback((songs: Song[], startIdx: number): number[] => {

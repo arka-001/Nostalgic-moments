@@ -11,6 +11,7 @@ import {
   LogOut,
   Menu,
   ChevronRight,
+  ShieldCheck,
 } from "lucide-react";
 import { fetchMe, logoutAdmin } from "@/lib/api";
 
@@ -18,6 +19,7 @@ const navItems = [
   { label: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard },
   { label: "Environments", href: "/admin/categories", icon: FolderOpen },
   { label: "Songs", href: "/admin/songs", icon: Music },
+  { label: "Security & Account", href: "/admin/security", icon: ShieldCheck },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

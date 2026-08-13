@@ -4,10 +4,11 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { CategoryDetail } from "@/types";
 import { useAudioPlayer } from "@/hooks/useAudioPlayer";
+import { soundscapeEngine, AmbientSoundType } from "@/lib/soundscapes";
 import {
   ArrowLeft, Radio, Music, Play, Pause, SkipBack, SkipForward,
   Volume2, Volume1, VolumeX, Shuffle, Repeat, Repeat1, ListMusic, ChevronDown,
-  Sparkles
+  Sparkles, Wind, Disc, Tv, Sliders, Keyboard, Check
 } from "lucide-react";
 
 interface ExperienceClientProps {
@@ -37,13 +38,19 @@ export default function ExperienceClient({ category }: ExperienceClientProps) {
 
   const [showPlaylist, setShowPlaylist] = useState(false);
   const [showVolume, setShowVolume] = useState(false);
+  const [showAtmosphere, setShowAtmosphere] = useState(false);
+  const [showShortcuts, setShowShortcuts] = useState(false);
   const [bgLoaded, setBgLoaded] = useState(false);
+
+  // Retro Atmospheric Effects State
+  const [ambientActive, setAmbientActive] = useState(true);
+  const [ambientVolume, setAmbientVolume] = useState(0.3);
+  const [vinylActive, setVinylActive] = useState(false);
+  const [retroCrtActive, setRetroCrtActive] = useState(false);
 
   const hasSongs = category.songs.length > 0;
 
-  // Admin-configurable transparency, 0–100 from the backend theme config.
-  // Clamped so a bad/blank value from the CMS never renders a fully invisible
-  // or fully opaque pill.
+  // Admin-configurable transparency
   const rawOpacity = category.theme_config?.player_transparency ?? 10;
   const playerOpacity = Math.min(90, Math.max(8, rawOpacity)) / 100;
   const playerBg = `rgba(0, 0, 0, ${playerOpacity})`;
@@ -51,8 +58,26 @@ export default function ExperienceClient({ category }: ExperienceClientProps) {
 
   const playlistRef = useRef<HTMLDivElement>(null);
   const volumeWrapRef = useRef<HTMLDivElement>(null);
+  const atmosphereRef = useRef<HTMLDivElement>(null);
   const activeTrackRef = useRef<HTMLDivElement>(null);
   const volumeCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── Sync Ambient Soundscapes ──────────────────────────────────────────
+  useEffect(() => {
+    if (!soundscapeEngine) return;
+    if (ambientActive && (isPlaying || !hasSongs)) {
+      const type = soundscapeEngine.getCategorySoundscapeType(category.slug);
+      soundscapeEngine.setSoundscape(type, ambientVolume);
+    } else {
+      soundscapeEngine.setSoundscape("off", 0);
+    }
+  }, [ambientActive, ambientVolume, category.slug, isPlaying, hasSongs]);
+
+  // ── Sync Vinyl & Tape Hiss Texture ────────────────────────────────────
+  useEffect(() => {
+    if (!soundscapeEngine) return;
+    soundscapeEngine.setVinylEffect(vinylActive, 0.18);
+  }, [vinylActive]);
 
   const fmtTime = (s: number) => {
     if (!Number.isFinite(s) || s < 0) return "0:00";
@@ -62,9 +87,6 @@ export default function ExperienceClient({ category }: ExperienceClientProps) {
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
   const effectiveVolume = isMuted ? 0 : volume;
 
-  // ── Volume popover: opens on hover/focus, closes with a short grace
-  // period so moving the mouse from the button up into the slider doesn't
-  // clip the popup shut, and also works via click/tap on touch devices. ──
   const openVolume = () => {
     if (volumeCloseTimer.current) clearTimeout(volumeCloseTimer.current);
     setShowVolume(true);
@@ -77,7 +99,7 @@ export default function ExperienceClient({ category }: ExperienceClientProps) {
     if (volumeCloseTimer.current) clearTimeout(volumeCloseTimer.current);
   }, []);
 
-  // Close popovers on outside click / Escape, and drive keyboard shortcuts.
+  // Close popovers on outside click / Escape
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (showPlaylist && playlistRef.current && !playlistRef.current.contains(e.target as Node)) {
@@ -85,6 +107,9 @@ export default function ExperienceClient({ category }: ExperienceClientProps) {
       }
       if (showVolume && volumeWrapRef.current && !volumeWrapRef.current.contains(e.target as Node)) {
         setShowVolume(false);
+      }
+      if (showAtmosphere && atmosphereRef.current && !atmosphereRef.current.contains(e.target as Node)) {
+        setShowAtmosphere(false);
       }
     }
     function handleKeyDown(e: KeyboardEvent) {
@@ -106,9 +131,15 @@ export default function ExperienceClient({ category }: ExperienceClientProps) {
         scheduleCloseVolume(1200);
       } else if (e.code === "KeyM") {
         toggleMute();
+      } else if (e.code === "KeyV") {
+        setVinylActive((v) => !v);
+      } else if (e.code === "KeyC") {
+        setRetroCrtActive((v) => !v);
       } else if (e.code === "Escape") {
         setShowPlaylist(false);
         setShowVolume(false);
+        setShowAtmosphere(false);
+        setShowShortcuts(false);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
@@ -117,8 +148,7 @@ export default function ExperienceClient({ category }: ExperienceClientProps) {
       document.removeEventListener("mousedown", handleClickOutside);
       window.removeEventListener("keydown", handleKeyDown);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showPlaylist, showVolume, hasSongs, effectiveVolume]);
+  }, [showPlaylist, showVolume, showAtmosphere, hasSongs, effectiveVolume, togglePlay, setVolume, toggleMute]);
 
   useEffect(() => {
     if (showPlaylist && activeTrackRef.current) {
@@ -126,7 +156,6 @@ export default function ExperienceClient({ category }: ExperienceClientProps) {
     }
   }, [showPlaylist]);
 
-  // Scroll wheel over the volume control nudges it up/down.
   const handleVolumeWheel = (e: React.WheelEvent) => {
     e.preventDefault();
     const delta = e.deltaY > 0 ? -0.05 : 0.05;
@@ -153,8 +182,14 @@ export default function ExperienceClient({ category }: ExperienceClientProps) {
   return (
     <div
       onMouseMove={handleMouseMove}
-      className="relative min-h-screen w-full overflow-hidden font-sans select-none bg-slate-950 text-white"
+      className={`relative min-h-screen w-full overflow-hidden font-sans select-none bg-slate-950 text-white ${
+        retroCrtActive ? "crt-mode" : ""
+      }`}
     >
+      {/* ── RETRO CRT SCANLINES OVERLAY (TOGGLEABLE) ── */}
+      {retroCrtActive && (
+        <div className="fixed inset-0 z-50 pointer-events-none crt-overlay opacity-40 mix-blend-overlay" />
+      )}
 
       {/* ── FULL-SCREEN ANIMATED BACKGROUND IMAGE (CINEMATIC SLOW PAN + MOUSE PARALLAX) ── */}
       <div
@@ -205,30 +240,35 @@ export default function ExperienceClient({ category }: ExperienceClientProps) {
           <span className="hidden xs:inline">Exit Environment</span>
         </Link>
 
-        <div className="text-right">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-black/25 border border-amber-400/30 text-amber-300 text-xs font-mono backdrop-blur-xl shadow-md">
-            <Radio className="w-3.5 h-3.5 animate-pulse text-amber-400" />
-            <span>{hasSongs ? (isPlaying ? "Live Scene" : "Paused") : "Scene Active"}</span>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowShortcuts((v) => !v)}
+            title="Keyboard Shortcuts"
+            className="p-2 rounded-full bg-black/25 hover:bg-black/40 border border-white/20 text-amber-300 text-xs backdrop-blur-xl transition hover:scale-105"
+          >
+            <Keyboard className="w-4 h-4" />
+          </button>
+
+          <div className="text-right">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-black/25 border border-amber-400/30 text-amber-300 text-xs font-mono backdrop-blur-xl shadow-md">
+              <Radio className="w-3.5 h-3.5 animate-pulse text-amber-400" />
+              <span>{hasSongs ? (isPlaying ? "Live Scene" : "Paused") : "Scene Active"}</span>
+            </div>
+            <h1 className="text-lg sm:text-2xl font-serif font-bold text-white mt-1 drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)] tracking-wide">
+              {category.name}
+            </h1>
           </div>
-          <h1 className="text-lg sm:text-2xl font-serif font-bold text-white mt-1 drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)] tracking-wide">
-            {category.name}
-          </h1>
-          {category.tagline && (
-            <p className="text-xs font-serif italic text-amber-200/80 drop-shadow-[0_1px_4px_rgba(0,0,0,0.8)] hidden sm:block mt-0.5">
-              &ldquo;{category.tagline}&rdquo;
-            </p>
-          )}
         </div>
       </header>
 
-      {/* Empty Playlist Glass Overlay Notice */}
+      {/* Empty Playlist Notice */}
       {!hasSongs && (
         <div className="fixed inset-0 z-10 flex items-center justify-center p-6 pointer-events-none">
           <div className="bg-black/40 border border-white/15 backdrop-blur-2xl rounded-3xl p-8 max-w-md text-center space-y-3 shadow-2xl pointer-events-auto">
             <Music className="w-8 h-8 text-amber-400 mx-auto" />
             <h2 className="text-lg font-serif font-bold text-amber-100">No tracks in this environment</h2>
             <p className="text-xs text-slate-300 leading-relaxed font-sans">
-              Enjoy the ambient visuals of {category.name}. Add MP3 tracks to this environment via the Admin Portal to start streaming.
+              Enjoy the ambient visuals and atmosphere of {category.name}. Add MP3 tracks to this environment via the Admin Portal to start streaming.
             </p>
             <Link
               href="/"
@@ -240,6 +280,137 @@ export default function ExperienceClient({ category }: ExperienceClientProps) {
         </div>
       )}
 
+      {/* ── ATMOSPHERE & RETRO EFFECTS POPUP ──────────────────────────── */}
+      {showAtmosphere && (
+        <div className="fixed inset-x-0 bottom-24 z-40 flex justify-center px-4">
+          <div
+            ref={atmosphereRef}
+            className="w-full max-w-sm backdrop-blur-2xl border border-white/20 rounded-3xl overflow-hidden shadow-[0_16px_48px_0_rgba(0,0,0,0.4)] animate-in fade-in slide-in-from-bottom-4 duration-300 p-5 space-y-4"
+            style={{ backgroundColor: playlistBg }}
+          >
+            <div className="flex items-center justify-between border-b border-white/15 pb-3">
+              <div className="flex items-center gap-2">
+                <Wind className="w-4 h-4 text-amber-400" />
+                <span className="text-xs font-mono uppercase tracking-widest text-amber-200">
+                  Atmospheric Soundscape
+                </span>
+              </div>
+              <button
+                onClick={() => setShowAtmosphere(false)}
+                className="text-slate-400 hover:text-white p-1 rounded-full"
+              >
+                <ChevronDown className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Environmental Audio Toggle & Slider */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-slate-200 font-medium flex items-center gap-1.5">
+                  <Wind className="w-3.5 h-3.5 text-amber-400" />
+                  {category.name} Ambience
+                </span>
+                <button
+                  onClick={() => setAmbientActive((v) => !v)}
+                  className={`px-2.5 py-0.5 rounded-full font-mono text-[11px] border transition ${
+                    ambientActive
+                      ? "bg-amber-500/20 text-amber-300 border-amber-400/40"
+                      : "bg-white/5 text-slate-400 border-white/10"
+                  }`}
+                >
+                  {ambientActive ? "ON" : "OFF"}
+                </button>
+              </div>
+
+              {ambientActive && (
+                <div className="flex items-center gap-2 pt-1">
+                  <input
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={0.02}
+                    value={ambientVolume}
+                    onChange={(e) => setAmbientVolume(parseFloat(e.target.value))}
+                    className="w-full h-1.5 accent-amber-400 bg-white/20 rounded-lg cursor-pointer"
+                  />
+                  <span className="text-[10px] font-mono text-amber-300 w-8 text-right">
+                    {Math.round(ambientVolume * 100)}%
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Vinyl Crackle & Tape Hiss */}
+            <div className="flex items-center justify-between pt-2 border-t border-white/10 text-xs">
+              <div className="space-y-0.5">
+                <span className="text-slate-200 font-medium flex items-center gap-1.5">
+                  <Disc className="w-3.5 h-3.5 text-amber-400" />
+                  Vinyl Crackle & Tape Hiss
+                </span>
+                <p className="text-[10px] text-slate-400">Warm analog acoustic texture</p>
+              </div>
+              <button
+                onClick={() => setVinylActive((v) => !v)}
+                className={`px-2.5 py-0.5 rounded-full font-mono text-[11px] border transition ${
+                  vinylActive
+                    ? "bg-amber-500/20 text-amber-300 border-amber-400/40"
+                    : "bg-white/5 text-slate-400 border-white/10"
+                }`}
+              >
+                {vinylActive ? "ON" : "OFF"}
+              </button>
+            </div>
+
+            {/* Retro CRT Scanlines Mode */}
+            <div className="flex items-center justify-between pt-2 border-t border-white/10 text-xs">
+              <div className="space-y-0.5">
+                <span className="text-slate-200 font-medium flex items-center gap-1.5">
+                  <Tv className="w-3.5 h-3.5 text-amber-400" />
+                  Retro CRT & Film Filter
+                </span>
+                <p className="text-[10px] text-slate-400">Vintage scanlines & analog glow</p>
+              </div>
+              <button
+                onClick={() => setRetroCrtActive((v) => !v)}
+                className={`px-2.5 py-0.5 rounded-full font-mono text-[11px] border transition ${
+                  retroCrtActive
+                    ? "bg-amber-500/20 text-amber-300 border-amber-400/40"
+                    : "bg-white/5 text-slate-400 border-white/10"
+                }`}
+              >
+                {retroCrtActive ? "ON" : "OFF"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── KEYBOARD SHORTCUTS MODAL ──────────────────────────────────── */}
+      {showShortcuts && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
+          <div className="w-full max-w-sm bg-slate-900 border border-white/20 rounded-3xl p-6 space-y-4 shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <h3 className="text-sm font-serif font-bold text-amber-200 flex items-center gap-2">
+                <Keyboard className="w-4 h-4 text-amber-400" /> Keyboard Shortcuts
+              </h3>
+              <button
+                onClick={() => setShowShortcuts(false)}
+                className="text-xs text-slate-400 hover:text-white"
+              >
+                Close
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-xs font-mono">
+              <div className="bg-white/5 p-2 rounded-xl border border-white/5"><kbd className="text-amber-400">Space</kbd> Play / Pause</div>
+              <div className="bg-white/5 p-2 rounded-xl border border-white/5"><kbd className="text-amber-400">↑ / ↓</kbd> Volume ±5%</div>
+              <div className="bg-white/5 p-2 rounded-xl border border-white/5"><kbd className="text-amber-400">M</kbd> Mute Audio</div>
+              <div className="bg-white/5 p-2 rounded-xl border border-white/5"><kbd className="text-amber-400">V</kbd> Vinyl Crackle</div>
+              <div className="bg-white/5 p-2 rounded-xl border border-white/5"><kbd className="text-amber-400">C</kbd> CRT Scanlines</div>
+              <div className="bg-white/5 p-2 rounded-xl border border-white/5"><kbd className="text-amber-400">Esc</kbd> Close Panels</div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── PLAYLIST POPUP ───────────────────────────────────────────── */}
       {showPlaylist && (
@@ -259,7 +430,7 @@ export default function ExperienceClient({ category }: ExperienceClientProps) {
               <button
                 onClick={() => setShowPlaylist(false)}
                 aria-label="Close playlist"
-                className="text-slate-300 hover:text-white transition p-1 rounded-full hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70"
+                className="text-slate-300 hover:text-white transition p-1 rounded-full hover:bg-white/10"
               >
                 <ChevronDown className="w-4 h-4" />
               </button>
@@ -287,7 +458,7 @@ export default function ExperienceClient({ category }: ExperienceClientProps) {
                           setShowPlaylist(false);
                         }
                       }}
-                      className={`flex items-center gap-3.5 px-4 py-2.5 rounded-2xl cursor-pointer transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70 ${isCurrent
+                      className={`flex items-center gap-3.5 px-4 py-2.5 rounded-2xl cursor-pointer transition ${isCurrent
                         ? "bg-amber-500/25 text-amber-200 border border-amber-400/40"
                         : "hover:bg-white/15 text-slate-100"
                         }`}
@@ -338,20 +509,24 @@ export default function ExperienceClient({ category }: ExperienceClientProps) {
       )}
 
       {/* ── FLOATING GLASS PLAYER PILL ────────────────────────────────── */}
-      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-30 w-[94%] max-w-lg">
+      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-30 w-[94%] max-w-xl">
         <div
           className="relative backdrop-blur-2xl border border-white/20 rounded-full px-3.5 sm:px-4 py-2.5 shadow-[0_8px_32px_0_rgba(0,0,0,0.37)] flex items-center justify-between gap-2 sm:gap-3 transition-all duration-300"
           style={{ backgroundColor: playerBg }}
         >
           <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent pointer-events-none rounded-full" />
 
-          {/* Left: Thumbnail, Title & Progress */}
+          {/* Left: Thumbnail & Visualizer */}
           <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
-            <div className="w-9 h-9 rounded-full overflow-hidden bg-black/40 border border-white/20 shrink-0 flex items-center justify-center shadow-md">
+            <div className="w-9 h-9 rounded-full overflow-hidden bg-black/40 border border-white/20 shrink-0 flex items-center justify-center shadow-md relative group">
               {currentSong?.cover_url ? (
-                <img src={currentSong.cover_url} alt="" className="w-full h-full object-cover" />
+                <img
+                  src={currentSong.cover_url}
+                  alt=""
+                  className={`w-full h-full object-cover transition duration-500 ${isPlaying ? "scale-110" : ""}`}
+                />
               ) : (
-                <Music className="w-4 h-4 text-amber-300" />
+                <Disc className={`w-5 h-5 text-amber-300 ${isPlaying ? "animate-spin" : ""}`} />
               )}
             </div>
 
@@ -395,13 +570,29 @@ export default function ExperienceClient({ category }: ExperienceClientProps) {
 
           {/* Right: Controls */}
           <div className="flex items-center gap-0.5 sm:gap-1 shrink-0">
+            {/* Atmosphere Popover Button */}
+            <button
+              onClick={() => {
+                setShowAtmosphere((v) => !v);
+                setShowPlaylist(false);
+              }}
+              title="Atmospheric Soundscapes & Retro FX"
+              className={`p-1.5 rounded-full transition border ${
+                showAtmosphere || ambientActive || vinylActive || retroCrtActive
+                  ? "bg-amber-500/25 border-amber-400/50 text-amber-300"
+                  : "bg-white/5 border-white/10 text-slate-300 hover:text-white hover:bg-white/10"
+              }`}
+            >
+              <Wind className="w-4 h-4" />
+            </button>
+
             <button
               onClick={toggleShuffle}
               disabled={!hasSongs}
               aria-label="Toggle shuffle"
-              aria-pressed={isShuffle}
-              className={`hidden sm:inline-flex p-1.5 rounded-full transition disabled:opacity-30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70 ${isShuffle ? "text-amber-300 bg-amber-500/20" : "text-slate-200 hover:text-white hover:bg-white/10"
-                }`}
+              className={`hidden sm:inline-flex p-1.5 rounded-full transition disabled:opacity-30 ${
+                isShuffle ? "text-amber-300 bg-amber-500/20" : "text-slate-200 hover:text-white hover:bg-white/10"
+              }`}
             >
               <Shuffle className="w-4 h-4" />
             </button>
@@ -410,7 +601,7 @@ export default function ExperienceClient({ category }: ExperienceClientProps) {
               onClick={prevTrack}
               disabled={!hasSongs}
               aria-label="Previous track"
-              className="p-1.5 rounded-full text-slate-200 hover:text-white hover:bg-white/10 active:scale-90 transition disabled:opacity-30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70"
+              className="p-1.5 rounded-full text-slate-200 hover:text-white hover:bg-white/10 active:scale-90 transition disabled:opacity-30"
             >
               <SkipBack className="w-4 h-4" />
             </button>
@@ -419,7 +610,7 @@ export default function ExperienceClient({ category }: ExperienceClientProps) {
               onClick={togglePlay}
               disabled={!hasSongs}
               aria-label={isPlaying ? "Pause" : "Play"}
-              className="w-10 h-10 sm:w-9 sm:h-9 rounded-full bg-gradient-to-r from-amber-400 to-amber-300 text-slate-950 flex items-center justify-center shadow-[0_0_16px_rgba(245,158,11,0.6)] hover:scale-105 active:scale-95 transition transform disabled:opacity-40 disabled:hover:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-200"
+              className="w-10 h-10 sm:w-9 sm:h-9 rounded-full bg-gradient-to-r from-amber-400 to-amber-300 text-slate-950 flex items-center justify-center shadow-[0_0_16px_rgba(245,158,11,0.6)] hover:scale-105 active:scale-95 transition transform disabled:opacity-40"
             >
               {isPlaying ? <Pause className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 fill-current ml-0.5" />}
             </button>
@@ -428,7 +619,7 @@ export default function ExperienceClient({ category }: ExperienceClientProps) {
               onClick={nextTrack}
               disabled={!hasSongs}
               aria-label="Next track"
-              className="p-1.5 rounded-full text-slate-200 hover:text-white hover:bg-white/10 active:scale-90 transition disabled:opacity-30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70"
+              className="p-1.5 rounded-full text-slate-200 hover:text-white hover:bg-white/10 active:scale-90 transition disabled:opacity-30"
             >
               <SkipForward className="w-4 h-4" />
             </button>
@@ -437,21 +628,14 @@ export default function ExperienceClient({ category }: ExperienceClientProps) {
               onClick={toggleRepeat}
               disabled={!hasSongs}
               aria-label="Toggle repeat mode"
-              aria-pressed={repeatMode !== "off"}
-              className={`hidden sm:inline-flex p-1.5 rounded-full transition disabled:opacity-30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70 ${repeatMode !== "off" ? "text-amber-300 bg-amber-500/20" : "text-slate-200 hover:text-white hover:bg-white/10"
-                }`}
+              className={`hidden sm:inline-flex p-1.5 rounded-full transition disabled:opacity-30 ${
+                repeatMode !== "off" ? "text-amber-300 bg-amber-500/20" : "text-slate-200 hover:text-white hover:bg-white/10"
+              }`}
             >
               <RepeatIcon className="w-4 h-4" />
             </button>
 
-            {/* ── ENHANCED VOLUME CONTROL ─────────────────────────────
-                - opens on hover AND keyboard focus, closes on a delay
-                  so the gap between button and popup doesn't clip it shut
-                - click/tap toggles it open for touch devices
-                - scroll wheel over the control nudges volume
-                - ↑ / ↓ nudge volume globally, M toggles mute
-                - icon reflects muted / low / high volume state
-            ------------------------------------------------------------ */}
+            {/* Volume Control */}
             <div
               ref={volumeWrapRef}
               className="relative"
@@ -463,9 +647,7 @@ export default function ExperienceClient({ category }: ExperienceClientProps) {
                 onClick={() => setShowVolume((v) => !v)}
                 onFocus={openVolume}
                 aria-label="Volume"
-                aria-expanded={showVolume}
-                aria-haspopup="true"
-                className="p-1.5 rounded-full text-slate-200 hover:text-white hover:bg-white/10 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70"
+                className="p-1.5 rounded-full text-slate-200 hover:text-white hover:bg-white/10 transition"
               >
                 <VolumeIcon className={`w-4 h-4 ${isMuted || effectiveVolume === 0 ? "text-rose-400" : "text-amber-300"}`} />
               </button>
@@ -477,15 +659,11 @@ export default function ExperienceClient({ category }: ExperienceClientProps) {
                   onMouseEnter={openVolume}
                   onMouseLeave={() => scheduleCloseVolume()}
                 >
-                  {/* Invisible bridge so the mouse never leaves the hover zone
-                      crossing the gap between the button and the popup */}
                   <div className="absolute -bottom-4 inset-x-0 h-4" />
-
                   <div className="flex items-center gap-2">
                     <button
                       onClick={toggleMute}
-                      aria-label={isMuted ? "Unmute" : "Mute"}
-                      className="text-amber-300 hover:text-amber-200 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70 rounded-full"
+                      className="text-amber-300 hover:text-amber-200 transition rounded-full"
                     >
                       <VolumeIcon className="w-4 h-4" />
                     </button>
@@ -504,14 +682,18 @@ export default function ExperienceClient({ category }: ExperienceClientProps) {
               )}
             </div>
 
+            {/* Playlist Button */}
             <button
-              onClick={() => setShowPlaylist((v) => !v)}
+              onClick={() => {
+                setShowPlaylist((v) => !v);
+                setShowAtmosphere(false);
+              }}
               aria-label="Toggle playlist"
-              aria-pressed={showPlaylist}
-              className={`p-1.5 rounded-full transition border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70 ${showPlaylist
-                ? "bg-amber-500/25 border-amber-400/50 text-amber-300"
-                : "bg-white/10 border-white/20 text-white hover:bg-white/20"
-                }`}
+              className={`p-1.5 rounded-full transition border ${
+                showPlaylist
+                  ? "bg-amber-500/25 border-amber-400/50 text-amber-300"
+                  : "bg-white/10 border-white/20 text-white hover:bg-white/20"
+              }`}
             >
               <ListMusic className="w-4 h-4" />
             </button>
@@ -523,6 +705,18 @@ export default function ExperienceClient({ category }: ExperienceClientProps) {
         @keyframes eq {
           0%, 100% { transform: scaleY(0.4); }
           50% { transform: scaleY(1); }
+        }
+        .crt-overlay {
+          background: linear-gradient(
+            rgba(18, 16, 16, 0) 50%, 
+            rgba(0, 0, 0, 0.25) 50%
+          ), linear-gradient(
+            90deg,
+            rgba(255, 0, 0, 0.06),
+            rgba(0, 255, 0, 0.02),
+            rgba(0, 0, 255, 0.06)
+          );
+          background-size: 100% 3px, 6px 100%;
         }
         @media (prefers-reduced-motion: reduce) {
           .animate-pulse, .animate-in { animation: none !important; }

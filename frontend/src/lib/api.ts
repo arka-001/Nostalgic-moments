@@ -91,6 +91,19 @@ export async function fetchMe(): Promise<AdminUser> {
   return apiFetch<AdminUser>("/api/auth/me");
 }
 
+export async function changeAdminPassword(
+  currentPassword: string,
+  newPassword: string
+): Promise<{ message: string }> {
+  return apiFetch<{ message: string }>("/api/auth/change-password", {
+    method: "POST",
+    body: JSON.stringify({
+      current_password: currentPassword,
+      new_password: newPassword,
+    }),
+  });
+}
+
 // --- Category / Environment APIs ---
 export async function fetchCategories(
   includeInactive: boolean = false
