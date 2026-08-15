@@ -345,7 +345,7 @@ export default function ExperienceClient({ category }: ExperienceClientProps) {
     }
   }, [showPlaylist]);
 
-  // Periodic Visitor Heartbeat (every 30s)
+  // Periodic Visitor Heartbeat (every 15s for live radar)
   useEffect(() => {
     sendHeartbeat({
       current_path: `/experience/${category.slug}`,
@@ -363,9 +363,9 @@ export default function ExperienceClient({ category }: ExperienceClientProps) {
         current_song_title: currentSong?.title,
         current_song_artist: currentSong?.artist,
         is_playing: isPlaying,
-        duration_increment: isPlaying ? 30 : 0,
+        duration_increment: isPlaying ? 15 : 0,
       });
-    }, 30000);
+    }, 15000);
 
     return () => clearInterval(interval);
   }, [category.slug, category.name, currentSong?.title, currentSong?.artist, isPlaying]);

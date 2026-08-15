@@ -16,17 +16,13 @@ export default function GlobalVisitorTracker() {
   useEffect(() => {
     if (!pathname) return;
 
-    // Send immediate heartbeat on initial mount or route change
-    const isExperience = pathname.startsWith("/experience/");
-    let envName: string | undefined = undefined;
+    // ExperienceClient manages its own detailed track and playback heartbeats
+    if (pathname.startsWith("/experience/")) {
+      return;
+    }
 
-    if (isExperience) {
-      const slug = pathname.replace("/experience/", "").replace(/-/g, " ");
-      envName = slug
-        .split(" ")
-        .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-        .join(" ");
-    } else if (pathname === "/") {
+    let envName = "General Browsing";
+    if (pathname === "/") {
       envName = "Homepage & Experience Showcase";
     } else if (pathname.startsWith("/admin")) {
       envName = "Admin Workspace";

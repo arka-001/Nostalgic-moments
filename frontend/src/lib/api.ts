@@ -281,14 +281,14 @@ export async function uploadImageFile(
 export function getOrCreateSessionId(): string {
   if (typeof window === "undefined") return "server_session";
   try {
-    let sess = localStorage.getItem("nostalgic_session_id");
+    let sess = sessionStorage.getItem("nostalgic_tab_session_id");
     if (!sess) {
-      sess = "sess_" + Math.random().toString(36).substring(2, 15) + "_" + Date.now().toString(36);
-      localStorage.setItem("nostalgic_session_id", sess);
+      sess = "sess_" + Math.random().toString(36).substring(2, 11) + "_" + Date.now().toString(36);
+      sessionStorage.setItem("nostalgic_tab_session_id", sess);
     }
     return sess;
   } catch (_) {
-    return "sess_fallback_" + Date.now();
+    return "sess_tab_" + Math.random().toString(36).substring(2, 10);
   }
 }
 
