@@ -8,6 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from app.core.config import settings
 from app.core.rate_limiter import RateLimiterMiddleware
 from app.core.security_headers import SecurityHeadersMiddleware
+from app.core.ip_blocker import IPBlockerMiddleware
 
 from app.api.health import router as health_router
 from app.api.auth import router as auth_router
@@ -60,13 +61,16 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# 1. Rate Limiting Middleware (Brute-force & Anti-abuse protection)
+# 1. Global IP Security Shield (Blocks restricted IP addresses from all public and stream APIs)
+app.add_middleware(IPBlockerMiddleware)
+
+# 2. Rate Limiting Middleware (Brute-force & Anti-abuse protection)
 app.add_middleware(RateLimiterMiddleware)
 
-# 2. HTTP Security Headers Middleware (XSS, Clickjacking, Sniffing hardening)
+# 3. HTTP Security Headers Middleware (XSS, Clickjacking, Sniffing hardening)
 app.add_middleware(SecurityHeadersMiddleware)
 
-# 3. Configure CORS (Supports localhost and ngrok public tunnels)
+# 4. Configure CORS (Supports localhost and ngrok public tunnels)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,

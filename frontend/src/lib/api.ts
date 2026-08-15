@@ -54,6 +54,16 @@ export async function apiFetch<T>(
     }
   }
 
+  if (response.status === 403) {
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(
+        new CustomEvent("nostalgic:ip_blocked", {
+          detail: { message: "Access restricted for your network." },
+        })
+      );
+    }
+  }
+
   if (!response.ok) {
     let errorDetail = `Request failed with status ${response.status}`;
     try {
@@ -333,11 +343,18 @@ export async function sendHeartbeat(data: {
       session_id: data.session_id || getOrCreateSessionId(),
       is_playing: Boolean(data.is_playing),
     };
-    await fetch(`${API_BASE_URL}/api/analytics/heartbeat`, {
+    const res = await fetch(`${API_BASE_URL}/api/analytics/heartbeat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
+    if (res.status === 403 && typeof window !== "undefined") {
+      window.dispatchEvent(
+        new CustomEvent("nostalgic:ip_blocked", {
+          detail: { message: "Access to this service has been restricted for your network." },
+        })
+      );
+    }
   } catch (_) {
     // Silent fail
   }

@@ -29,6 +29,7 @@ import {
   ListMusic,
   ChevronDown,
   Sparkles,
+  ShieldAlert,
   Sliders,
   Wind,
   CloudRain,
@@ -108,6 +109,22 @@ export default function ExperienceClient({ category }: ExperienceClientProps) {
       return unsub;
     }
   }, []);
+
+  // ── IP SHIELD LOCKOUT STATE ──
+  const [isIpBlocked, setIsIpBlocked] = useState(false);
+  const [ipBlockedReason, setIpBlockedReason] = useState("");
+
+  useEffect(() => {
+    const handleIpBlocked = (e: any) => {
+      setIsIpBlocked(true);
+      setIpBlockedReason(e?.detail?.message || "Your network IP has been restricted by platform administration.");
+      pauseAudio();
+      multiAmbientEngine?.stopAll();
+    };
+
+    window.addEventListener("nostalgic:ip_blocked", handleIpBlocked);
+    return () => window.removeEventListener("nostalgic:ip_blocked", handleIpBlocked);
+  }, [pauseAudio]);
 
   // ── FAVORITES SYSTEM (localStorage) ──
   const [favoriteSongIds, setFavoriteSongIds] = useState<string[]>([]);
@@ -424,6 +441,31 @@ export default function ExperienceClient({ category }: ExperienceClientProps) {
         retroFilter ? "sepia-[0.35] contrast-105" : ""
       }`}
     >
+      {/* ── FULL-SCREEN IP SHIELD LOCKOUT MODAL ── */}
+      {isIpBlocked && (
+        <div className="fixed inset-0 z-[99999] bg-slate-950/95 backdrop-blur-2xl flex items-center justify-center p-6 text-center animate-in fade-in duration-300">
+          <div className="max-w-md w-full p-8 rounded-3xl bg-slate-900 border border-rose-500/40 shadow-2xl space-y-4">
+            <div className="w-16 h-16 rounded-3xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center mx-auto text-rose-400">
+              <ShieldAlert className="w-8 h-8 animate-pulse" />
+            </div>
+            <div className="space-y-1">
+              <span className="text-[10px] font-mono uppercase tracking-widest text-rose-400 bg-rose-500/10 px-2.5 py-0.5 rounded-full border border-rose-500/20">
+                Network Restricted
+              </span>
+              <h2 className="text-2xl font-serif font-bold text-slate-100">
+                Access Prohibited
+              </h2>
+            </div>
+            <p className="text-xs text-slate-400 leading-relaxed font-sans">
+              {ipBlockedReason || "Access to music streaming, ambience soundscapes, and platform features has been restricted for your network address."}
+            </p>
+            <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 text-[11px] font-mono text-slate-400">
+              Please contact the platform administrator to appeal or restore your connection.
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── FULL-SCREEN ANIMATED BACKGROUND IMAGE ── */}
       <div
         className="absolute inset-0 z-0 transition-transform duration-700 ease-out pointer-events-none"
