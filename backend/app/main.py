@@ -66,10 +66,11 @@ app.add_middleware(RateLimiterMiddleware)
 # 2. HTTP Security Headers Middleware (XSS, Clickjacking, Sniffing hardening)
 app.add_middleware(SecurityHeadersMiddleware)
 
-# 3. Configure CORS
+# 3. Configure CORS (Supports localhost and ngrok public tunnels)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
+    allow_origin_regex=r"^https?://([a-zA-Z0-9-]+\.)*(ngrok-free\.app|ngrok\.io|localhost|127\.0\.0\.1)(:[0-9]+)?$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
