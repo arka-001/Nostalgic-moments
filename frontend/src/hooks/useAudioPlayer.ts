@@ -308,6 +308,63 @@ export function useAudioPlayer(initialSongs: Song[] = []) {
     }
   }, [isPlaying, currentSong, isCurrentSongYouTube]);
 
+  // 5b. Explicit pauseAudio
+  const pauseAudio = useCallback(() => {
+    setIsPlaying(false);
+    if (isCurrentSongYouTube(currentSong)) {
+      if (ytPlayerRef.current && ytPlayerReadyRef.current) {
+        try {
+          ytPlayerRef.current.pauseVideo();
+        } catch (e) {
+          console.warn("YouTube pause error:", e);
+        }
+      }
+    } else {
+      const audio = audioRef.current;
+      if (audio) {
+        audio.pause();
+      }
+    }
+  }, [currentSong, isCurrentSongYouTube]);
+
+  // 5c. Smooth fade-out and pause (for sleep timer)
+  const fadeOutAndPause = useCallback((durationSec: number = 10, onComplete?: () => void) => {
+    const startVol = volume;
+    const steps = 20;
+    const intervalMs = Math.max(50, Math.floor((durationSec * 1000) / steps));
+    let stepCount = 0;
+
+    const fadeTimer = setInterval(() => {
+      stepCount++;
+      const factor = Math.max(0, 1 - stepCount / steps);
+      const curVol = startVol * factor;
+
+      if (audioRef.current) {
+        audioRef.current.volume = curVol;
+      }
+      if (ytPlayerRef.current && ytPlayerReadyRef.current) {
+        try {
+          ytPlayerRef.current.setVolume(Math.round(curVol * 100));
+        } catch (_) {}
+      }
+
+      if (stepCount >= steps) {
+        clearInterval(fadeTimer);
+        pauseAudio();
+        // Restore volume back so next playback plays at normal volume
+        setTimeout(() => {
+          if (audioRef.current) audioRef.current.volume = startVol;
+          if (ytPlayerRef.current && ytPlayerReadyRef.current) {
+            try {
+              ytPlayerRef.current.setVolume(Math.round(startVol * 100));
+            } catch (_) {}
+          }
+          if (onComplete) onComplete();
+        }, 300);
+      }
+    }, intervalMs);
+  }, [volume, pauseAudio]);
+
   // 6. Unified playSong
   const playSong = useCallback((song: Song, newQueue?: Song[]) => {
     const activeQueue = newQueue || queue;
@@ -574,6 +631,9 @@ export function useAudioPlayer(initialSongs: Song[] = []) {
     currentIndex,
     isFullscreen,
     togglePlay,
+    pauseAudio,
+    pause: pauseAudio,
+    fadeOutAndPause,
     playSong,
     seek,
     setVolume,

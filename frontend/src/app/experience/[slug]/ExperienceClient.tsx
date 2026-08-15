@@ -63,6 +63,8 @@ export default function ExperienceClient({ category }: ExperienceClientProps) {
     isShuffle,
     repeatMode,
     togglePlay,
+    pauseAudio,
+    fadeOutAndPause,
     playSong,
     seek,
     setVolume,
@@ -82,6 +84,14 @@ export default function ExperienceClient({ category }: ExperienceClientProps) {
   const [bgLoaded, setBgLoaded] = useState(false);
   const [retroFilter, setRetroFilter] = useState(false);
   const bgImgRef = useRef<HTMLImageElement>(null);
+  const sleepTimerWrapRef = useRef<HTMLDivElement>(null);
+  const [customTimerMinutes, setCustomTimerMinutes] = useState("");
+
+  // Keep references to player functions to prevent stale closures in timer intervals
+  const pauseAudioRef = useRef(pauseAudio);
+  pauseAudioRef.current = pauseAudio;
+  const fadeOutAndPauseRef = useRef(fadeOutAndPause);
+  fadeOutAndPauseRef.current = fadeOutAndPause;
 
   // ── MULTI-LAYER AMBIENT MIXER STATE ──
   const [ambientStateMap, setAmbientStateMap] = useState<MultiLayerStateMap>({});
@@ -124,46 +134,65 @@ export default function ExperienceClient({ category }: ExperienceClientProps) {
 
   const isCurrentFavorite = currentSong?.id ? favoriteSongIds.includes(currentSong.id) : false;
 
-  // ── SLEEP TIMER & FADE-OUT ENGINE ──
-  const [sleepTimerMinutes, setSleepTimerMinutes] = useState<number | null>(null);
+  // ── ROBUST SLEEP TIMER & FADE-OUT ENGINE ──
+  const [sleepTimerOption, setSleepTimerOption] = useState<number | "track" | null>(null);
   const [sleepTimerRemainingSec, setSleepTimerRemainingSec] = useState<number | null>(null);
   const sleepTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const targetEndTimeRef = useRef<number | null>(null);
   const isFadingOutRef = useRef(false);
 
-  const setSleepTimer = (minutes: number | null) => {
-    if (sleepTimerRef.current) clearInterval(sleepTimerRef.current);
+  const setSleepTimer = (option: number | "track" | null) => {
+    if (sleepTimerRef.current) {
+      clearInterval(sleepTimerRef.current);
+      sleepTimerRef.current = null;
+    }
     isFadingOutRef.current = false;
-    setSleepTimerMinutes(minutes);
 
-    if (minutes === null) {
+    if (option === null) {
+      targetEndTimeRef.current = null;
+      setSleepTimerOption(null);
       setSleepTimerRemainingSec(null);
       return;
     }
 
-    const totalSeconds = minutes * 60;
-    setSleepTimerRemainingSec(totalSeconds);
+    let totalSec = 0;
+    if (option === "track") {
+      const rem = Math.max(5, Math.ceil((duration || 180) - (currentTime || 0)));
+      totalSec = rem;
+    } else {
+      totalSec = Math.max(1, Math.round(option * 60));
+    }
+
+    setSleepTimerOption(option);
+    setSleepTimerRemainingSec(totalSec);
+    const targetEnd = Date.now() + totalSec * 1000;
+    targetEndTimeRef.current = targetEnd;
 
     sleepTimerRef.current = setInterval(() => {
-      setSleepTimerRemainingSec((prev) => {
-        if (prev === null || prev <= 1) {
-          if (sleepTimerRef.current) clearInterval(sleepTimerRef.current);
-          // Trigger complete stop
-          if (multiAmbientEngine) multiAmbientEngine.stopAll();
-          if (isPlaying) togglePlay();
-          setSleepTimerMinutes(null);
-          return null;
-        }
+      if (!targetEndTimeRef.current) return;
+      const now = Date.now();
+      const secRemaining = Math.max(0, Math.ceil((targetEndTimeRef.current - now) / 1000));
+      setSleepTimerRemainingSec(secRemaining);
 
-        // Smooth fade-out in final 20 seconds
-        if (prev <= 20 && !isFadingOutRef.current) {
-          isFadingOutRef.current = true;
-          if (multiAmbientEngine) {
-            multiAmbientEngine.fadeOutAll(20);
-          }
-        }
+      // Smooth fade-out in final 15 seconds (or half duration if shorter)
+      const fadeThreshold = Math.min(15, Math.max(3, Math.floor(totalSec / 2)));
+      if (secRemaining <= fadeThreshold && !isFadingOutRef.current && secRemaining > 0) {
+        isFadingOutRef.current = true;
+        if (multiAmbientEngine) multiAmbientEngine.fadeOutAll(fadeThreshold);
+        fadeOutAndPauseRef.current(fadeThreshold);
+      }
 
-        return prev - 1;
-      });
+      if (secRemaining <= 0) {
+        if (sleepTimerRef.current) {
+          clearInterval(sleepTimerRef.current);
+          sleepTimerRef.current = null;
+        }
+        targetEndTimeRef.current = null;
+        setSleepTimerOption(null);
+        setSleepTimerRemainingSec(null);
+        pauseAudioRef.current();
+        if (multiAmbientEngine) multiAmbientEngine.stopAll();
+      }
     }, 1000);
   };
 
@@ -267,6 +296,9 @@ export default function ExperienceClient({ category }: ExperienceClientProps) {
       }
       if (showAmbientControls && ambientWrapRef.current && !ambientWrapRef.current.contains(e.target as Node)) {
         setShowAmbientControls(false);
+      }
+      if (showSleepTimerModal && sleepTimerWrapRef.current && !sleepTimerWrapRef.current.contains(e.target as Node)) {
+        setShowSleepTimerModal(false);
       }
     }
 
@@ -461,8 +493,8 @@ export default function ExperienceClient({ category }: ExperienceClientProps) {
           <button
             onClick={() => setShowSleepTimerModal((v) => !v)}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-mono backdrop-blur-xl transition hover:scale-105 shadow-md ${
-              sleepTimerMinutes !== null
-                ? "bg-purple-500/20 border-purple-500/40 text-purple-300"
+              sleepTimerOption !== null
+                ? "bg-purple-500/20 border-purple-500/50 text-purple-300 shadow-purple-500/10 animate-pulse"
                 : "bg-black/30 hover:bg-black/50 border-white/20 text-slate-300"
             }`}
             title="Sleep Timer"
@@ -470,7 +502,9 @@ export default function ExperienceClient({ category }: ExperienceClientProps) {
             <Moon className="w-3.5 h-3.5 text-purple-400" />
             <span>
               {sleepTimerRemainingSec !== null
-                ? `${Math.floor(sleepTimerRemainingSec / 60)}:${String(sleepTimerRemainingSec % 60).padStart(2, "0")}`
+                ? sleepTimerRemainingSec >= 3600
+                  ? `${Math.floor(sleepTimerRemainingSec / 3600)}:${String(Math.floor((sleepTimerRemainingSec % 3600) / 60)).padStart(2, "0")}:${String(sleepTimerRemainingSec % 60).padStart(2, "0")}`
+                  : `${Math.floor(sleepTimerRemainingSec / 60)}:${String(sleepTimerRemainingSec % 60).padStart(2, "0")}`
                 : "Sleep"}
             </span>
           </button>
@@ -512,26 +546,45 @@ export default function ExperienceClient({ category }: ExperienceClientProps) {
 
       {/* ── SLEEP TIMER MODAL ────────────────────────────────────────── */}
       {showSleepTimerModal && (
-        <div className="fixed top-20 right-4 sm:right-6 z-40 w-72 rounded-3xl bg-slate-950/90 border border-purple-500/30 backdrop-blur-2xl shadow-2xl p-5 space-y-4 animate-in fade-in zoom-in-95 duration-150">
-          <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+        <div
+          ref={sleepTimerWrapRef}
+          className="fixed top-20 right-4 sm:right-6 z-40 w-80 rounded-3xl bg-slate-950/95 border border-purple-500/30 backdrop-blur-2xl shadow-2xl p-5 space-y-4 animate-in fade-in zoom-in-95 duration-150"
+        >
+          <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
             <div className="flex items-center gap-2 text-purple-300 font-serif font-bold text-sm">
               <Moon className="w-4 h-4 text-purple-400" />
               <span>Sleep Timer</span>
             </div>
             <button
               onClick={() => setShowSleepTimerModal(false)}
-              className="text-slate-400 hover:text-slate-200"
+              className="p-1 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-white/5 transition"
             >
               <X className="w-4 h-4" />
             </button>
           </div>
 
           <p className="text-xs text-slate-400 leading-relaxed">
-            Gradually fades out music and ambient sounds before stopping playback.
+            Gradually fades out music and ambient sounds before gently stopping playback.
           </p>
 
-          <div className="grid grid-cols-2 gap-2">
-            {[15, 30, 45, 60].map((mins) => (
+          {/* Active countdown status banner */}
+          {sleepTimerOption !== null && sleepTimerRemainingSec !== null && (
+            <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-purple-950/40 border border-purple-500/30 text-purple-200">
+              <div className="flex items-center gap-2 text-xs font-mono">
+                <Clock className="w-3.5 h-3.5 text-purple-400 animate-spin" style={{ animationDuration: "8s" }} />
+                <span>Stopping in:</span>
+              </div>
+              <span className="font-mono text-sm font-bold text-purple-300">
+                {sleepTimerRemainingSec >= 3600
+                  ? `${Math.floor(sleepTimerRemainingSec / 3600)}:${String(Math.floor((sleepTimerRemainingSec % 3600) / 60)).padStart(2, "0")}:${String(sleepTimerRemainingSec % 60).padStart(2, "0")}`
+                  : `${Math.floor(sleepTimerRemainingSec / 60)}:${String(sleepTimerRemainingSec % 60).padStart(2, "0")}`}
+              </span>
+            </div>
+          )}
+
+          {/* Preset Buttons */}
+          <div className="grid grid-cols-3 gap-2">
+            {[5, 10, 15, 30, 45, 60].map((mins) => (
               <button
                 key={mins}
                 onClick={() => {
@@ -539,23 +592,77 @@ export default function ExperienceClient({ category }: ExperienceClientProps) {
                   setShowSleepTimerModal(false);
                 }}
                 className={`py-2 rounded-xl text-xs font-mono font-semibold transition border ${
-                  sleepTimerMinutes === mins
-                    ? "bg-purple-500/20 border-purple-500 text-purple-200 shadow-md shadow-purple-500/20"
-                    : "bg-slate-900 border-slate-800 text-slate-300 hover:border-slate-700"
+                  sleepTimerOption === mins
+                    ? "bg-purple-500/25 border-purple-500 text-purple-200 shadow-md shadow-purple-500/20"
+                    : "bg-slate-900/90 border-slate-800 text-slate-300 hover:border-purple-500/40 hover:text-white"
                 }`}
               >
-                {mins} Minutes
+                {mins}m
               </button>
             ))}
           </div>
 
-          {sleepTimerMinutes !== null && (
+          {/* End of Current Track option */}
+          {currentSong && duration > 0 && (
+            <button
+              onClick={() => {
+                setSleepTimer("track");
+                setShowSleepTimerModal(false);
+              }}
+              className={`w-full py-2.5 px-3 rounded-xl text-xs font-mono font-medium flex items-center justify-between border transition ${
+                sleepTimerOption === "track"
+                  ? "bg-purple-500/25 border-purple-500 text-purple-200 shadow-md shadow-purple-500/20"
+                  : "bg-slate-900/90 border-slate-800 text-slate-300 hover:border-purple-500/40 hover:text-white"
+              }`}
+            >
+              <span className="flex items-center gap-1.5">
+                <Music className="w-3.5 h-3.5 text-purple-400" />
+                End of Current Track
+              </span>
+              <span className="text-[11px] text-purple-300/80">
+                ~{Math.max(1, Math.ceil((duration - currentTime) / 60))}m left
+              </span>
+            </button>
+          )}
+
+          {/* Custom Minute Input */}
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              const mins = parseInt(customTimerMinutes, 10);
+              if (!isNaN(mins) && mins > 0 && mins <= 360) {
+                setSleepTimer(mins);
+                setCustomTimerMinutes("");
+                setShowSleepTimerModal(false);
+              }
+            }}
+            className="flex items-center gap-2 pt-1"
+          >
+            <input
+              type="number"
+              min="1"
+              max="360"
+              placeholder="Custom mins"
+              value={customTimerMinutes}
+              onChange={(e) => setCustomTimerMinutes(e.target.value)}
+              className="flex-1 bg-slate-900/90 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-200 placeholder:text-slate-500 font-mono focus:outline-none focus:border-purple-500"
+            />
+            <button
+              type="submit"
+              disabled={!customTimerMinutes || parseInt(customTimerMinutes, 10) <= 0}
+              className="px-3 py-1.5 rounded-xl bg-purple-600/30 hover:bg-purple-600/50 border border-purple-500/40 text-purple-200 text-xs font-mono font-medium disabled:opacity-40 disabled:cursor-not-allowed transition"
+            >
+              Set
+            </button>
+          </form>
+
+          {sleepTimerOption !== null && (
             <button
               onClick={() => {
                 setSleepTimer(null);
                 setShowSleepTimerModal(false);
               }}
-              className="w-full py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-xs font-mono text-rose-400 transition"
+              className="w-full py-2 rounded-xl bg-rose-950/30 hover:bg-rose-900/40 border border-rose-500/30 text-xs font-mono text-rose-300 transition"
             >
               Turn Off Timer
             </button>
