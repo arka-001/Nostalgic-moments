@@ -400,13 +400,18 @@ export default function AdminVisitorsPage() {
             <div className="flex rounded-xl bg-slate-950 p-1 border border-slate-800">
               <button
                 onClick={() => setStatusFilter("all")}
-                className={`px-3 py-1.5 rounded-lg text-xs font-mono transition ${
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono transition ${
                   statusFilter === "all"
                     ? "bg-slate-800 text-slate-100 shadow"
                     : "text-slate-400 hover:text-slate-200"
                 }`}
               >
-                All
+                <span>All</span>
+                {data && (
+                  <span className="px-1.5 py-0.2 rounded-full bg-slate-700 text-slate-300 text-[10px]">
+                    {data.total_records}
+                  </span>
+                )}
               </button>
               <button
                 onClick={() => setStatusFilter("online")}
@@ -417,7 +422,14 @@ export default function AdminVisitorsPage() {
                 }`}
               >
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                Live Now
+                <span>Live Now</span>
+                {data && (
+                  <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${
+                    data.live_online_count > 0 ? "bg-emerald-500/30 text-emerald-200" : "bg-slate-800 text-slate-400"
+                  }`}>
+                    {data.live_online_count}
+                  </span>
+                )}
               </button>
             </div>
           </div>
@@ -429,12 +441,25 @@ export default function AdminVisitorsPage() {
             <RefreshCw className="w-8 h-8 text-amber-400 animate-spin" />
           </div>
         ) : !data || data.visitors.length === 0 ? (
-          <div className="p-16 text-center text-slate-400 space-y-2">
+          <div className="p-16 text-center text-slate-400 space-y-3">
             <Users className="w-10 h-10 text-slate-600 mx-auto" />
-            <p className="text-slate-300 font-medium">No visitor sessions match your filter.</p>
-            <p className="text-xs text-slate-500">
-              When listeners visit Nostalgic Moments or stream tracks, their live sessions and GeoIP location appear here.
+            <p className="text-slate-300 font-medium">No visitor sessions match your current filter.</p>
+            <p className="text-xs text-slate-500 max-w-md mx-auto">
+              {statusFilter === "online"
+                ? "There are currently no active visitors streaming tracks in the last 5 minutes."
+                : "When listeners visit Nostalgic Moments or stream tracks, their live sessions and GeoIP location appear here."}
             </p>
+            {(statusFilter !== "all" || search) && (
+              <button
+                onClick={() => {
+                  setStatusFilter("all");
+                  setSearch("");
+                }}
+                className="mt-2 px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 text-xs font-mono transition"
+              >
+                Reset Filters & View All Sessions
+              </button>
+            )}
           </div>
         ) : (
           <div className="overflow-x-auto">

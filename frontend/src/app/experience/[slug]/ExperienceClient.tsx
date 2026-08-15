@@ -98,11 +98,12 @@ export default function ExperienceClient({ category }: ExperienceClientProps) {
   const [ambientMasterVolume, setAmbientMasterVolume] = useState<number>(1.0);
 
   useEffect(() => {
-    if (multiAmbientEngine) {
-      setAmbientMasterVolume(multiAmbientEngine.getMasterVolume());
-      const unsub = multiAmbientEngine.subscribe((state) => {
+    const engine = multiAmbientEngine;
+    if (engine) {
+      setAmbientMasterVolume(engine.getMasterVolume());
+      const unsub = engine.subscribe((state) => {
         setAmbientStateMap(state);
-        setAmbientMasterVolume(multiAmbientEngine.getMasterVolume());
+        setAmbientMasterVolume(engine.getMasterVolume());
       });
       return unsub;
     }

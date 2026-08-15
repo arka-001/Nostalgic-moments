@@ -5,7 +5,7 @@ from typing import List, Dict, Optional
 import uuid
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Query, Response
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, desc, or_, and_
+from sqlalchemy import select, func, desc, or_, and_, case
 
 from app.api.deps import get_db_session, get_current_admin
 from app.models.admin import AdminUser
@@ -248,7 +248,7 @@ async def get_admin_visitors(
 ):
     """Fetch live visitor logs with GeoIP resolution, device breakdown, and map points."""
     now_utc = datetime.now(timezone.utc)
-    online_threshold = now_utc - timedelta(minutes=3)
+    online_threshold = now_utc - timedelta(minutes=5)
 
     # Base query for visitors
     base_query = select(VisitorSession)
@@ -383,7 +383,7 @@ async def get_admin_visitors(
             VisitorSession.longitude,
             func.count(VisitorSession.id).label("total_s"),
             func.sum(
-                func.cast(VisitorSession.last_seen_at >= online_threshold, func.integer if db.bind.dialect.name == "sqlite" else func.int)
+                case((VisitorSession.last_seen_at >= online_threshold, 1), else_=0)
             ).label("active_l"),
         )
         .where(
@@ -626,7 +626,7 @@ async def delete_blocked_ip(
     summary="Export Visitor Logs or Streaming Analytics to CSV (Admin)",
 )
 async def export_analytics_csv(
-    type: str = Query("visitors", regex="^(visitors|streaming)$"),
+    type: str = Query("visitors", pattern="^(visitors|streaming)$"),
     current_admin: AdminUser = Depends(get_current_admin),
     db: AsyncSession = Depends(get_db_session),
 ):

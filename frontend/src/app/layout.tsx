@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import GlobalVisitorTracker from "@/components/analytics/GlobalVisitorTracker";
 
 export const metadata: Metadata = {
   title: "Nostalgic Moments — Immersive Music Experience Platform",
@@ -14,6 +15,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="bg-slate-950 text-slate-100 antialiased selection:bg-amber-500 selection:text-black">
+        <GlobalVisitorTracker />
         {children}
       </body>
     </html>
