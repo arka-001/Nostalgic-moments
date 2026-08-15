@@ -43,7 +43,7 @@ async def _check_if_ip_blocked(ip: str, db: AsyncSession) -> bool:
         BlockedIP.is_active == True,
     )
     res = await db.execute(q)
-    blocked = res.scalar_one_or_none()
+    blocked = res.scalars().first()
     if blocked:
         # Check expiration if set
         if blocked.expires_at and blocked.expires_at < datetime.now(timezone.utc):
@@ -79,10 +79,14 @@ async def _upsert_visitor_session(
     ua_info = parse_user_agent(ua_str)
     geo_info = await resolve_geoip(ip_addr)
 
-    # Find existing session by session_id
-    q = select(VisitorSession).where(VisitorSession.session_id == session_id)
+    # Find existing session by session_id (ordered by most recent)
+    q = (
+        select(VisitorSession)
+        .where(VisitorSession.session_id == session_id)
+        .order_by(VisitorSession.last_seen_at.desc())
+    )
     res = await db.execute(q)
-    session_obj = res.scalar_one_or_none()
+    session_obj = res.scalars().first()
 
     now_utc = datetime.now(timezone.utc)
 
@@ -500,7 +504,7 @@ async def toggle_block_ip(
     clean_ip = ip.strip()
     q = select(BlockedIP).where(BlockedIP.ip_address == clean_ip)
     res = await db.execute(q)
-    record = res.scalar_one_or_none()
+    record = res.scalars().first()
 
     if record:
         record.is_active = not record.is_active
@@ -563,7 +567,7 @@ async def create_blocked_ip(
     clean_ip = payload.ip_address.strip()
     q = select(BlockedIP).where(BlockedIP.ip_address == clean_ip)
     res = await db.execute(q)
-    existing = res.scalar_one_or_none()
+    existing = res.scalars().first()
 
     if existing:
         existing.is_active = True
@@ -612,7 +616,7 @@ async def delete_blocked_ip(
     clean_ip = ip.strip()
     q = select(BlockedIP).where(BlockedIP.ip_address == clean_ip)
     res = await db.execute(q)
-    existing = res.scalar_one_or_none()
+    existing = res.scalars().first()
     if existing:
         await db.delete(existing)
         await db.commit()

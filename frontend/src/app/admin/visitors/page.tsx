@@ -25,6 +25,10 @@ import {
   Download,
   FileSpreadsheet,
   Ban,
+  X,
+  AlertTriangle,
+  Lock,
+  Unlock,
 } from "lucide-react";
 import { fetchVisitorTelemetry, toggleBlockIp, getCsvExportUrl } from "@/lib/api";
 import { VisitorSession, VisitorTelemetrySummary, GeoDistributionItem } from "@/types";
@@ -40,6 +44,16 @@ function getCountryFlag(countryCode?: string): string {
   return String.fromCodePoint(...codePoints);
 }
 
+interface IPModalState {
+  isOpen: boolean;
+  ip: string;
+  isBlocked: boolean;
+  city?: string;
+  country?: string;
+  countryCode?: string;
+  isp?: string;
+}
+
 export default function AdminVisitorsPage() {
   const [data, setData] = useState<VisitorTelemetrySummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -51,7 +65,20 @@ export default function AdminVisitorsPage() {
   const [copiedIp, setCopiedIp] = useState<string | null>(null);
   const [blockingIp, setBlockingIp] = useState<string | null>(null);
 
+  // IP Block Modal State & Toast
+  const [ipModal, setIpModal] = useState<IPModalState>({
+    isOpen: false,
+    ip: "",
+    isBlocked: false,
+  });
+  const [toastMessage, setToastMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
+
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const showToast = (text: string, type: "success" | "error" = "success") => {
+    setToastMessage({ text, type });
+    setTimeout(() => setToastMessage(null), 4000);
+  };
 
   const loadData = async (isSilent = false) => {
     if (!isSilent) setLoading(true);
@@ -104,17 +131,30 @@ export default function AdminVisitorsPage() {
     setTimeout(() => setCopiedIp(null), 2000);
   };
 
-  const handleToggleBlock = async (ip: string) => {
-    const confirmAction = window.confirm(`Are you sure you want to toggle block status for IP: ${ip}?`);
-    if (!confirmAction) return;
+  const openBlockModal = (v: VisitorSession) => {
+    setIpModal({
+      isOpen: true,
+      ip: v.ip_address,
+      isBlocked: Boolean(v.is_blocked),
+      city: v.city,
+      country: v.country,
+      countryCode: v.country_code,
+      isp: v.isp,
+    });
+  };
 
-    setBlockingIp(ip);
+  const handleConfirmToggleBlock = async () => {
+    if (!ipModal.ip) return;
+    const targetIp = ipModal.ip;
+    setBlockingIp(targetIp);
+
     try {
-      const res = await toggleBlockIp(ip);
+      const res = await toggleBlockIp(targetIp);
       await loadData(true);
-      alert(res.message);
+      setIpModal((prev) => ({ ...prev, isOpen: false }));
+      showToast(res.message, "success");
     } catch (err: any) {
-      alert(`Failed to update IP block: ${err.message || "Unknown error"}`);
+      showToast(`Failed to update IP block: ${err.message || "Unknown error"}`, "error");
     } finally {
       setBlockingIp(null);
     }
@@ -140,6 +180,24 @@ export default function AdminVisitorsPage() {
 
   return (
     <div className="space-y-8 max-w-7xl pb-16 font-sans">
+      {/* Toast Notification Banner */}
+      {toastMessage && (
+        <div
+          className={`fixed top-6 right-6 z-50 flex items-center gap-3 px-4 py-3 rounded-2xl shadow-2xl backdrop-blur-xl border transition-all animate-in fade-in slide-in-from-top-4 duration-200 ${
+            toastMessage.type === "success"
+              ? "bg-slate-950/95 border-emerald-500/40 text-emerald-300"
+              : "bg-slate-950/95 border-rose-500/40 text-rose-300"
+          }`}
+        >
+          {toastMessage.type === "success" ? (
+            <Check className="w-4 h-4 text-emerald-400" />
+          ) : (
+            <AlertTriangle className="w-4 h-4 text-rose-400" />
+          )}
+          <span className="text-xs font-mono">{toastMessage.text}</span>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
         <div>
@@ -188,202 +246,184 @@ export default function AdminVisitorsPage() {
             className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-mono transition border ${
               autoRefresh
                 ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
-                : "bg-slate-900 border-slate-800 text-slate-400"
+                : "bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200"
             }`}
-            title="Toggle live auto-refresh every 10 seconds"
           >
-            <Activity className={`w-3.5 h-3.5 ${autoRefresh ? "animate-pulse text-emerald-400" : ""}`} />
-            <span>{autoRefresh ? "Auto-Refresh On" : "Auto-Refresh Off"}</span>
-          </button>
-
-          <button
-            onClick={() => loadData()}
-            disabled={loading}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold transition shadow-md shadow-amber-500/20"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
-            <span>Refresh</span>
+            <RefreshCw className={`w-3.5 h-3.5 ${autoRefresh ? "animate-spin" : ""}`} />
+            <span>{autoRefresh ? "Radar Live (10s)" : "Radar Paused"}</span>
           </button>
         </div>
       </div>
 
-      {/* ── METRICS OVERVIEW CARDS ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-        {/* Live Online Listeners */}
-        <div className="relative overflow-hidden rounded-3xl p-6 bg-gradient-to-br from-emerald-950/40 via-slate-900/80 to-slate-950 border border-emerald-500/30 shadow-xl backdrop-blur-xl group">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-2xl pointer-events-none" />
-          <div className="flex items-center justify-between mb-3">
-            <div className="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
-              <Radio className="w-5 h-5 animate-pulse" />
-            </div>
-            <span className="flex items-center gap-1.5 text-xs font-mono text-emerald-300 bg-emerald-500/10 px-2.5 py-0.5 rounded-full border border-emerald-500/30">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-              Live Now
-            </span>
+      {/* ── METRIC TILES OVERVIEW ── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Metric 1: Live Online Listeners */}
+        <div className="p-5 rounded-2xl bg-gradient-to-br from-emerald-950/40 via-slate-900 to-slate-950 border border-emerald-500/30 shadow-xl space-y-2">
+          <div className="flex items-center justify-between text-xs font-mono text-emerald-300">
+            <span>LIVE NOW</span>
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
           </div>
-          <div className="text-3xl font-bold font-mono text-emerald-300">
-            {data?.live_online_count ?? 0}
+          <div className="text-3xl font-bold text-emerald-200 font-mono">
+            {data ? data.live_online_count : "..."}
           </div>
-          <div className="text-xs text-slate-400 mt-1 font-serif">Active Online Listeners</div>
-          <div className="text-[11px] text-slate-500 mt-3 pt-2 border-t border-slate-800/80 font-mono">
-            Active in last 3 minutes
-          </div>
+          <p className="text-xs text-slate-400">Listeners active in the last 5 minutes</p>
         </div>
 
-        {/* Total Unique Visitors */}
-        <div className="relative overflow-hidden rounded-3xl p-6 bg-gradient-to-br from-slate-900/90 via-slate-900/60 to-slate-950 border border-slate-800 shadow-xl backdrop-blur-xl group">
-          <div className="flex items-center justify-between mb-3">
-            <div className="p-3 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
-              <Users className="w-5 h-5" />
-            </div>
-            <span className="text-xs font-mono text-cyan-300 bg-cyan-500/10 px-2.5 py-0.5 rounded-full border border-cyan-500/20">
-              Total Audience
-            </span>
+        {/* Metric 2: Total Unique Listeners */}
+        <div className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 shadow-xl space-y-2">
+          <div className="flex items-center justify-between text-xs font-mono text-amber-300">
+            <span>UNIQUE AUDIENCE</span>
+            <Users className="w-4 h-4 text-amber-400" />
           </div>
-          <div className="text-3xl font-bold font-mono text-cyan-300">
-            {data?.total_unique_visitors ?? 0}
+          <div className="text-3xl font-bold text-amber-200 font-mono">
+            {data ? data.total_unique_visitors : "..."}
           </div>
-          <div className="text-xs text-slate-400 mt-1 font-serif">Unique IP Sessions</div>
-          <div className="text-[11px] text-slate-500 mt-3 pt-2 border-t border-slate-800/80 font-mono">
-            Across all environments
-          </div>
+          <p className="text-xs text-slate-400">Unique listener session profiles</p>
         </div>
 
-        {/* Global Reach */}
-        <div className="relative overflow-hidden rounded-3xl p-6 bg-gradient-to-br from-slate-900/90 via-slate-900/60 to-slate-950 border border-slate-800 shadow-xl backdrop-blur-xl group">
-          <div className="flex items-center justify-between mb-3">
-            <div className="p-3 rounded-2xl bg-purple-500/10 border border-purple-500/20 text-purple-400">
-              <Globe className="w-5 h-5" />
-            </div>
-            <span className="text-xs font-mono text-purple-300 bg-purple-500/10 px-2.5 py-0.5 rounded-full border border-purple-500/20">
-              Geographic
-            </span>
+        {/* Metric 3: Global Reach (Countries) */}
+        <div className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 shadow-xl space-y-2">
+          <div className="flex items-center justify-between text-xs font-mono text-cyan-300">
+            <span>GLOBAL REACH</span>
+            <Globe className="w-4 h-4 text-cyan-400" />
           </div>
-          <div className="text-3xl font-bold font-mono text-purple-300">
-            {data?.total_countries_reached ?? 1}
+          <div className="text-3xl font-bold text-cyan-200 font-mono">
+            {data ? data.total_countries_reached : "..."}
           </div>
-          <div className="text-xs text-slate-400 mt-1 font-serif">Countries Reached</div>
-          <div className="text-[11px] text-slate-500 mt-3 pt-2 border-t border-slate-800/80 font-mono">
-            {data?.top_cities?.[0]?.name ? `Top City: ${data.top_cities[0].name}` : "Global Network"}
-          </div>
+          <p className="text-xs text-slate-400">Countries reached worldwide</p>
         </div>
 
-        {/* Device Landscape */}
-        <div className="relative overflow-hidden rounded-3xl p-6 bg-gradient-to-br from-slate-900/90 via-slate-900/60 to-slate-950 border border-slate-800 shadow-xl backdrop-blur-xl group">
-          <div className="flex items-center justify-between mb-3">
-            <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400">
-              <Laptop className="w-5 h-5" />
-            </div>
-            <span className="text-xs font-mono text-amber-300 bg-amber-500/10 px-2.5 py-0.5 rounded-full border border-amber-500/20">
-              Platforms
-            </span>
+        {/* Metric 4: Total Recorded Sessions */}
+        <div className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 shadow-xl space-y-2">
+          <div className="flex items-center justify-between text-xs font-mono text-purple-300">
+            <span>TOTAL SESSIONS</span>
+            <Activity className="w-4 h-4 text-purple-400" />
           </div>
-          <div className="text-3xl font-bold font-mono text-amber-300">
-            {data?.device_breakdown?.[0]?.name ?? "Desktop"}
+          <div className="text-3xl font-bold text-purple-200 font-mono">
+            {data ? data.total_records : "..."}
           </div>
-          <div className="text-xs text-slate-400 mt-1 font-serif">Leading Device Type</div>
-          <div className="text-[11px] text-slate-500 mt-3 pt-2 border-t border-slate-800/80 font-mono">
-            {data?.browser_breakdown?.[0]?.name ? `Top Browser: ${data.browser_breakdown[0].name}` : "Web Audio API"}
-          </div>
+          <p className="text-xs text-slate-400">Visitor interactions recorded</p>
         </div>
       </div>
 
-      {/* ── INTERACTIVE WORLD VISITOR MAP ── */}
+      {/* ── INTERACTIVE GIS GEOGRAPHIC LISTENER RADAR ── */}
       <WorldVisitorMap
         points={data?.geo_map_points || []}
-        liveCount={data?.live_online_count || 1}
+        liveCount={data?.live_online_count || 0}
       />
 
-      {/* ── GEOGRAPHIC & PLATFORM BREAKDOWN SECTION ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Top Countries Card */}
-        <div className="lg:col-span-6 bg-slate-900/85 border border-slate-800 rounded-3xl p-6 backdrop-blur-xl space-y-4 shadow-xl">
-          <div className="flex items-center justify-between pb-2 border-b border-slate-800/80">
-            <h2 className="text-base font-serif font-bold text-amber-100 flex items-center gap-2">
-              <Globe className="w-4 h-4 text-amber-400" /> Geographic Country Distribution
-            </h2>
-            <span className="text-xs font-mono text-slate-400">Top Listener Locations</span>
+      {/* ── GEOGRAPHIC & DEVICE BREAKDOWN ANALYTICS ── */}
+      {data && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+          {/* Top Countries */}
+          <div className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 shadow-xl space-y-3">
+            <h4 className="text-sm font-bold text-amber-200 font-mono flex items-center gap-2">
+              <Globe className="w-4 h-4 text-amber-400" /> Top Countries
+            </h4>
+            <div className="space-y-2.5 text-xs">
+              {data.top_countries.length === 0 ? (
+                <p className="text-slate-500 text-xs">No country data recorded yet.</p>
+              ) : (
+                data.top_countries.map((c) => (
+                  <div key={c.name} className="space-y-1">
+                    <div className="flex justify-between text-slate-300">
+                      <span className="flex items-center gap-1.5">
+                        <span>{getCountryFlag(c.code)}</span>
+                        <span>{c.name}</span>
+                      </span>
+                      <span className="font-mono text-slate-400">
+                        {c.count} ({c.percentage}%)
+                      </span>
+                    </div>
+                    <div className="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
+                      <div
+                        className="h-full bg-amber-500 rounded-full transition-all duration-500"
+                        style={{ width: `${Math.min(100, c.percentage)}%` }}
+                      />
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
 
-          <div className="space-y-3">
-            {data?.top_countries && data.top_countries.length > 0 ? (
-              data.top_countries.map((c) => (
-                <div key={c.name} className="space-y-1">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="flex items-center gap-2 text-slate-200 font-medium">
-                      <span className="text-base">{getCountryFlag(c.code)}</span>
-                      <span>{c.name}</span>
-                    </span>
-                    <span className="font-mono text-slate-400">
-                      <strong className="text-amber-300 font-bold">{c.count}</strong> listeners ({c.percentage}%)
-                    </span>
+          {/* Top Cities */}
+          <div className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 shadow-xl space-y-3">
+            <h4 className="text-sm font-bold text-cyan-200 font-mono flex items-center gap-2">
+              <MapPin className="w-4 h-4 text-cyan-400" /> Top Cities
+            </h4>
+            <div className="space-y-2.5 text-xs">
+              {data.top_cities.length === 0 ? (
+                <p className="text-slate-500 text-xs">No city data recorded yet.</p>
+              ) : (
+                data.top_cities.map((city) => (
+                  <div key={city.name} className="space-y-1">
+                    <div className="flex justify-between text-slate-300">
+                      <span>{city.name}</span>
+                      <span className="font-mono text-slate-400">
+                        {city.count} ({city.percentage}%)
+                      </span>
+                    </div>
+                    <div className="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
+                      <div
+                        className="h-full bg-cyan-500 rounded-full transition-all duration-500"
+                        style={{ width: `${Math.min(100, city.percentage)}%` }}
+                      />
+                    </div>
                   </div>
-                  <div className="w-full h-2 bg-slate-800/80 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-gradient-to-r from-amber-500 to-amber-300 rounded-full transition-all duration-500"
-                      style={{ width: `${Math.max(4, c.percentage)}%` }}
-                    />
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Device & OS Share */}
+          <div className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 shadow-xl space-y-3">
+            <h4 className="text-sm font-bold text-emerald-200 font-mono flex items-center gap-2">
+              <Laptop className="w-4 h-4 text-emerald-400" /> Device Distribution
+            </h4>
+            <div className="space-y-2.5 text-xs">
+              {data.device_breakdown.length === 0 ? (
+                <p className="text-slate-500 text-xs">No device data recorded yet.</p>
+              ) : (
+                data.device_breakdown.map((dev) => (
+                  <div key={dev.name} className="space-y-1">
+                    <div className="flex justify-between text-slate-300">
+                      <span className="flex items-center gap-1.5">
+                        {getDeviceIcon(dev.name)}
+                        <span>{dev.name}</span>
+                      </span>
+                      <span className="font-mono text-slate-400">
+                        {dev.count} ({dev.percentage}%)
+                      </span>
+                    </div>
+                    <div className="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
+                      <div
+                        className="h-full bg-emerald-500 rounded-full transition-all duration-500"
+                        style={{ width: `${Math.min(100, dev.percentage)}%` }}
+                      />
+                    </div>
                   </div>
-                </div>
-              ))
-            ) : (
-              <p className="text-xs text-slate-500 py-4 text-center">No country data tracked yet.</p>
-            )}
+                ))
+              )}
+            </div>
           </div>
         </div>
+      )}
 
-        {/* Top Cities Card */}
-        <div className="lg:col-span-6 bg-slate-900/85 border border-slate-800 rounded-3xl p-6 backdrop-blur-xl space-y-4 shadow-xl">
-          <div className="flex items-center justify-between pb-2 border-b border-slate-800/80">
-            <h2 className="text-base font-serif font-bold text-amber-100 flex items-center gap-2">
-              <MapPin className="w-4 h-4 text-cyan-400" /> Top Listener Cities & Regions
-            </h2>
-            <span className="text-xs font-mono text-slate-400">Regional Concentrations</span>
-          </div>
-
-          <div className="space-y-3">
-            {data?.top_cities && data.top_cities.length > 0 ? (
-              data.top_cities.map((city) => (
-                <div key={city.name} className="space-y-1">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="flex items-center gap-1.5 text-slate-200 font-medium">
-                      <MapPin className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
-                      <span className="truncate max-w-xs">{city.name}</span>
-                    </span>
-                    <span className="font-mono text-slate-400">
-                      <strong className="text-cyan-300 font-bold">{city.count}</strong> sessions ({city.percentage}%)
-                    </span>
-                  </div>
-                  <div className="w-full h-2 bg-slate-800/80 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-gradient-to-r from-cyan-500 to-blue-400 rounded-full transition-all duration-500"
-                      style={{ width: `${Math.max(4, city.percentage)}%` }}
-                    />
-                  </div>
-                </div>
-              ))
-            ) : (
-              <p className="text-xs text-slate-500 py-4 text-center">No city data available yet.</p>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* ── LIVE VISITORS INTELLIGENCE TABLE ── */}
-      <div className="bg-slate-900/90 border border-slate-800 rounded-3xl overflow-hidden shadow-xl space-y-4 p-6 sm:p-8">
-        {/* Controls & Search Filter Bar */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
+      {/* ── ACTIVE & HISTORICAL SESSIONS TABLE ── */}
+      <div className="rounded-3xl bg-slate-900/90 border border-slate-800 shadow-2xl p-6 space-y-4">
+        {/* Table Filters Header */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-3 border-b border-slate-800">
           <div>
-            <h2 className="text-xl font-serif font-bold text-amber-100 flex items-center gap-2">
-              <Users className="w-5 h-5 text-amber-400" /> Active & Historical Visitor Sessions
-            </h2>
+            <h3 className="text-base font-serif font-bold text-amber-100 flex items-center gap-2">
+              <Users className="w-4 h-4 text-amber-400" /> Active & Historical Visitor Sessions
+            </h3>
             <p className="text-xs text-slate-400">
               Live tracking enriched with client IP, GeoIP ISP details, active streaming tracks, and IP block protection.
             </p>
           </div>
 
-          {/* Filters */}
-          <div className="flex flex-wrap items-center gap-2.5">
+          <div className="flex flex-wrap items-center gap-3">
             {/* Search Input */}
             <div className="relative">
               <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -424,9 +464,13 @@ export default function AdminVisitorsPage() {
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
                 <span>Live Now</span>
                 {data && (
-                  <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${
-                    data.live_online_count > 0 ? "bg-emerald-500/30 text-emerald-200" : "bg-slate-800 text-slate-400"
-                  }`}>
+                  <span
+                    className={`px-1.5 py-0.2 rounded-full text-[10px] ${
+                      data.live_online_count > 0
+                        ? "bg-emerald-500/30 text-emerald-200"
+                        : "bg-slate-800 text-slate-400"
+                    }`}
+                  >
                     {data.live_online_count}
                   </span>
                 )}
@@ -473,30 +517,30 @@ export default function AdminVisitorsPage() {
                   <th className="px-4 py-3 text-left">Environment & Song</th>
                   <th className="px-4 py-3 text-center hidden lg:table-cell">Listened</th>
                   <th className="px-4 py-3 text-right">Last Seen</th>
-                  <th className="px-4 py-3 text-center">Shield</th>
+                  <th className="px-4 py-3 text-center">IP Shield</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800">
+              <tbody className="divide-y divide-slate-800/60">
                 {data.visitors.map((v) => {
-                  const isCopied = copiedIp === v.ip_address;
-                  const isBlocking = blockingIp === v.ip_address;
+                  const isLive = v.is_online;
+                  const isBlocked = v.is_blocked;
 
                   return (
-                    <tr key={v.id} className="hover:bg-slate-800/30 transition">
-                      {/* Status */}
-                      <td className="px-4 py-4">
-                        {v.is_blocked ? (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-mono text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded-full border border-rose-500/30">
-                            <Ban className="w-3 h-3" /> Blocked
-                          </span>
-                        ) : v.is_online ? (
-                          <span className="inline-flex items-center gap-1.5 text-xs font-mono text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/30">
+                    <tr
+                      key={v.id}
+                      className="hover:bg-slate-800/40 transition group"
+                    >
+                      {/* Live Status */}
+                      <td className="px-4 py-4 whitespace-nowrap">
+                        {isLive ? (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs font-mono font-medium">
                             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                            Live
+                            Live Now
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 text-xs font-mono text-slate-500 bg-slate-800/60 px-2 py-0.5 rounded-full border border-slate-700">
-                            Idle
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-800 border border-slate-700 text-slate-400 text-xs font-mono">
+                            <span className="w-1.5 h-1.5 rounded-full bg-slate-500" />
+                            Offline
                           </span>
                         )}
                       </td>
@@ -504,22 +548,29 @@ export default function AdminVisitorsPage() {
                       {/* IP Address & ISP */}
                       <td className="px-4 py-4">
                         <div className="space-y-0.5">
-                          <div className="flex items-center gap-1.5 font-mono text-xs font-semibold text-slate-100">
-                            <span>{v.ip_address}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-xs text-slate-200 font-bold">
+                              {v.ip_address}
+                            </span>
                             <button
                               onClick={() => handleCopyIp(v.ip_address)}
-                              className="text-slate-500 hover:text-amber-400 transition"
+                              className="text-slate-500 hover:text-amber-300 transition"
                               title="Copy IP Address"
                             >
-                              {isCopied ? (
-                                <Check className="w-3.5 h-3.5 text-emerald-400" />
+                              {copiedIp === v.ip_address ? (
+                                <Check className="w-3 h-3 text-emerald-400" />
                               ) : (
-                                <Copy className="w-3.5 h-3.5" />
+                                <Copy className="w-3 h-3" />
                               )}
                             </button>
+                            {isBlocked && (
+                              <span className="px-1.5 py-0.2 rounded bg-rose-500/20 border border-rose-500/40 text-rose-300 text-[10px] font-mono">
+                                BLOCKED
+                              </span>
+                            )}
                           </div>
-                          <p className="text-[11px] text-slate-400 truncate max-w-xs font-sans">
-                            {v.isp || "Broadband / Provider"}
+                          <p className="text-[11px] text-slate-500 font-mono truncate max-w-[200px]" title={v.isp}>
+                            {v.isp || "Unknown Provider"}
                           </p>
                         </div>
                       </td>
@@ -586,17 +637,17 @@ export default function AdminVisitorsPage() {
                         {formatRelativeTime(v.last_seen_at)}
                       </td>
 
-                      {/* IP Block Shield Action */}
+                      {/* IP Block Shield Action Button */}
                       <td className="px-4 py-4 text-center">
                         <button
-                          onClick={() => handleToggleBlock(v.ip_address)}
-                          disabled={isBlocking}
+                          onClick={() => openBlockModal(v)}
+                          disabled={blockingIp === v.ip_address}
                           className={`p-2 rounded-xl text-xs font-mono transition flex items-center justify-center gap-1 mx-auto ${
                             v.is_blocked
-                              ? "bg-rose-500/20 text-rose-300 hover:bg-rose-500/30 border border-rose-500/40"
+                              ? "bg-rose-500/20 text-rose-300 hover:bg-rose-500/30 border border-rose-500/40 shadow-lg shadow-rose-950/40"
                               : "bg-slate-800 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 border border-slate-700"
                           }`}
-                          title={v.is_blocked ? "Unblock IP Address" : "Block IP Address"}
+                          title={v.is_blocked ? "Manage IP Block Rule" : "Block IP Address"}
                         >
                           {v.is_blocked ? (
                             <ShieldAlert className="w-4 h-4 text-rose-400" />
@@ -639,6 +690,127 @@ export default function AdminVisitorsPage() {
           </div>
         )}
       </div>
+
+      {/* ── LUXURY IP SHIELD CONFIRMATION MODAL ── */}
+      {ipModal.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200">
+          <div
+            className="relative w-full max-w-md rounded-3xl bg-slate-950 border border-slate-800 p-6 shadow-2xl space-y-5 animate-in zoom-in-95 duration-150"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Close Button */}
+            <button
+              onClick={() => setIpModal((prev) => ({ ...prev, isOpen: false }))}
+              className="absolute top-5 right-5 p-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white transition"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            {/* Modal Header */}
+            <div className="flex items-start gap-3.5">
+              <div
+                className={`p-3 rounded-2xl border ${
+                  ipModal.isBlocked
+                    ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
+                    : "bg-rose-500/10 border-rose-500/30 text-rose-400"
+                }`}
+              >
+                {ipModal.isBlocked ? (
+                  <Unlock className="w-6 h-6" />
+                ) : (
+                  <Lock className="w-6 h-6" />
+                )}
+              </div>
+              <div className="space-y-1">
+                <span className="text-[10px] font-mono text-cyan-400 uppercase tracking-wider bg-cyan-500/10 px-2 py-0.5 rounded-full border border-cyan-500/20">
+                  IP Security Shield
+                </span>
+                <h3 className="text-lg font-serif font-bold text-slate-100">
+                  {ipModal.isBlocked ? "Unblock IP Address" : "Restrict IP Access"}
+                </h3>
+              </div>
+            </div>
+
+            {/* Target Details Card */}
+            <div className="p-4 rounded-2xl bg-slate-900/90 border border-slate-800/90 space-y-2.5 font-mono text-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400">Target IP:</span>
+                <span className="text-amber-300 font-bold text-sm">{ipModal.ip}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400">Location:</span>
+                <span className="text-slate-200 flex items-center gap-1">
+                  <span>{getCountryFlag(ipModal.countryCode)}</span>
+                  <span>{ipModal.city || "Unknown City"}</span>
+                  <span className="text-slate-500">({ipModal.country || "Unknown"})</span>
+                </span>
+              </div>
+              {ipModal.isp && (
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400">Network ISP:</span>
+                  <span className="text-slate-300 truncate max-w-[180px]">{ipModal.isp}</span>
+                </div>
+              )}
+              <div className="flex items-center justify-between pt-1 border-t border-slate-800">
+                <span className="text-slate-400">Current Status:</span>
+                <span
+                  className={`font-bold ${
+                    ipModal.isBlocked ? "text-rose-400" : "text-emerald-400"
+                  }`}
+                >
+                  {ipModal.isBlocked ? "🔴 Actively Blocked" : "🟢 Allowed"}
+                </span>
+              </div>
+            </div>
+
+            {/* Action Explanation */}
+            <p className="text-xs text-slate-400 leading-relaxed">
+              {ipModal.isBlocked
+                ? "Unblocking will immediately restore music streaming, ambience mixer, and platform access for all visitors on this IP."
+                : "Blocking will immediately restrict this IP from streaming tracks, accessing experiences, or fetching catalog data."}
+            </p>
+
+            {/* Action Buttons */}
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setIpModal((prev) => ({ ...prev, isOpen: false }))}
+                disabled={blockingIp === ipModal.ip}
+                className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 text-xs font-mono transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmToggleBlock}
+                disabled={blockingIp === ipModal.ip}
+                className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-mono font-bold transition shadow-xl ${
+                  ipModal.isBlocked
+                    ? "bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-emerald-950/50"
+                    : "bg-rose-600 hover:bg-rose-500 text-white shadow-rose-950/50"
+                }`}
+              >
+                {blockingIp === ipModal.ip ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Processing...</span>
+                  </>
+                ) : ipModal.isBlocked ? (
+                  <>
+                    <Unlock className="w-3.5 h-3.5" />
+                    <span>Confirm Unblock IP</span>
+                  </>
+                ) : (
+                  <>
+                    <Ban className="w-3.5 h-3.5" />
+                    <span>Block IP Address</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
