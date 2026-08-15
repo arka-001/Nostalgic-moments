@@ -20,13 +20,17 @@ class IPBlockerMiddleware(BaseHTTPMiddleware):
     """
 
     async def dispatch(self, request: Request, call_next):
-        # 1. Allow non-blocking paths: preflight CORS OPTIONS, admin authentication, health probe, docs
+        # 1. Allow non-blocking paths:
+        # - Preflight CORS OPTIONS
+        # - Admin endpoints (/api/analytics/admin/..., /api/admin/..., etc.)
+        # - Authentication routes (/api/v1/auth/..., /api/auth/...)
+        # - Health probes & OpenAPI documentation
         path = request.url.path
         if (
             request.method == "OPTIONS"
-            or path.startswith("/api/v1/auth")
-            or path.startswith("/api/v1/health")
-            or path.startswith("/api/v1/admin")
+            or "/admin" in path
+            or "/auth" in path
+            or "/health" in path
             or path.startswith("/docs")
             or path.startswith("/openapi.json")
             or path.startswith("/redoc")
