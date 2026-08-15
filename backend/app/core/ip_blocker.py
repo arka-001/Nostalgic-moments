@@ -7,7 +7,7 @@ from sqlalchemy import select
 
 from app.db.session import AsyncSessionLocal
 from app.services.geoip import extract_client_ip
-from app.models.analytics import BlockedIP
+from app.models.blocked_ip import BlockedIP
 
 logger = logging.getLogger(__name__)
 
