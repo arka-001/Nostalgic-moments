@@ -19,7 +19,7 @@ export const AVAILABLE_AMBIENT_LAYERS: AmbientLayerConfig[] = [
     id: "rain",
     name: "Window Rain",
     category: "Weather",
-    defaultVolume: 0.35,
+    defaultVolume: 0.85,
     iconName: "CloudRain",
     url: "https://assets.mixkit.co/active_storage/sfx/1254/1254-preview.mp3",
   },
@@ -27,7 +27,7 @@ export const AVAILABLE_AMBIENT_LAYERS: AmbientLayerConfig[] = [
     id: "thunder",
     name: "Distant Thunder",
     category: "Weather",
-    defaultVolume: 0.25,
+    defaultVolume: 0.80,
     iconName: "CloudLightning",
     url: "https://assets.mixkit.co/active_storage/sfx/1271/1271-preview.mp3",
   },
@@ -35,7 +35,7 @@ export const AVAILABLE_AMBIENT_LAYERS: AmbientLayerConfig[] = [
     id: "bus_engine",
     name: "Vintage Bus Engine",
     category: "Travel",
-    defaultVolume: 0.30,
+    defaultVolume: 0.85,
     iconName: "Bus",
     url: "https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3",
   },
@@ -43,7 +43,7 @@ export const AVAILABLE_AMBIENT_LAYERS: AmbientLayerConfig[] = [
     id: "tea_stall",
     name: "Boiling Kettle & Chai",
     category: "Urban",
-    defaultVolume: 0.25,
+    defaultVolume: 0.80,
     iconName: "Coffee",
     url: "https://assets.mixkit.co/active_storage/sfx/2418/2418-preview.mp3",
   },
@@ -51,7 +51,7 @@ export const AVAILABLE_AMBIENT_LAYERS: AmbientLayerConfig[] = [
     id: "salon_scissors",
     name: "Salon Scissors & Hiss",
     category: "Urban",
-    defaultVolume: 0.20,
+    defaultVolume: 0.75,
     iconName: "Scissors",
     url: "https://assets.mixkit.co/active_storage/sfx/1655/1655-preview.mp3",
   },
@@ -59,7 +59,7 @@ export const AVAILABLE_AMBIENT_LAYERS: AmbientLayerConfig[] = [
     id: "birds",
     name: "Morning Birds",
     category: "Nature",
-    defaultVolume: 0.25,
+    defaultVolume: 0.80,
     iconName: "Trees",
     url: "https://assets.mixkit.co/active_storage/sfx/2436/2436-preview.mp3",
   },
@@ -67,7 +67,7 @@ export const AVAILABLE_AMBIENT_LAYERS: AmbientLayerConfig[] = [
     id: "train_tracks",
     name: "Rhythmic Train Tracks",
     category: "Travel",
-    defaultVolume: 0.30,
+    defaultVolume: 0.85,
     iconName: "Train",
     url: "https://assets.mixkit.co/active_storage/sfx/2573/2573-preview.mp3",
   },
@@ -75,7 +75,7 @@ export const AVAILABLE_AMBIENT_LAYERS: AmbientLayerConfig[] = [
     id: "car_engine",
     name: "Midnight Car Ride",
     category: "Travel",
-    defaultVolume: 0.25,
+    defaultVolume: 0.80,
     iconName: "Car",
     url: "https://assets.mixkit.co/active_storage/sfx/2569/2569-preview.mp3",
   },
@@ -83,7 +83,7 @@ export const AVAILABLE_AMBIENT_LAYERS: AmbientLayerConfig[] = [
     id: "road_noise",
     name: "Highway Road Ambience",
     category: "Travel",
-    defaultVolume: 0.20,
+    defaultVolume: 0.80,
     iconName: "Wind",
     url: "https://assets.mixkit.co/active_storage/sfx/1252/1252-preview.mp3",
   },
@@ -204,6 +204,10 @@ class MultiLayerAmbientEngine {
     this.notify();
   }
 
+  public getMasterVolume(): number {
+    return this.masterVolume;
+  }
+
   public setMasterVolume(vol: number) {
     this.masterVolume = Math.max(0, Math.min(1, vol));
     AVAILABLE_AMBIENT_LAYERS.forEach((layer) => {
@@ -214,6 +218,7 @@ class MultiLayerAmbientEngine {
         audio.volume = Math.max(0, Math.min(1, effectiveVol));
       }
     });
+    this.notify();
   }
 
   public stopAll() {

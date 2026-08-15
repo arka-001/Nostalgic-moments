@@ -95,11 +95,14 @@ export default function ExperienceClient({ category }: ExperienceClientProps) {
 
   // ── MULTI-LAYER AMBIENT MIXER STATE ──
   const [ambientStateMap, setAmbientStateMap] = useState<MultiLayerStateMap>({});
+  const [ambientMasterVolume, setAmbientMasterVolume] = useState<number>(1.0);
 
   useEffect(() => {
     if (multiAmbientEngine) {
+      setAmbientMasterVolume(multiAmbientEngine.getMasterVolume());
       const unsub = multiAmbientEngine.subscribe((state) => {
         setAmbientStateMap(state);
+        setAmbientMasterVolume(multiAmbientEngine.getMasterVolume());
       });
       return unsub;
     }
@@ -694,6 +697,32 @@ export default function ExperienceClient({ category }: ExperienceClientProps) {
           <p className="text-xs text-slate-400 leading-relaxed">
             Layer and blend individual background textures simultaneously with the music.
           </p>
+
+          {/* Master Ambience Volume Slider */}
+          <div className="p-3 rounded-2xl bg-amber-950/30 border border-amber-500/30 space-y-1.5 shadow-sm">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-serif font-semibold text-amber-200 flex items-center gap-1.5">
+                <Volume2 className="w-3.5 h-3.5 text-amber-400" />
+                Master Ambience Volume
+              </span>
+              <span className="font-mono text-amber-300 text-[11px] font-bold">
+                {Math.round(ambientMasterVolume * 100)}%
+              </span>
+            </div>
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.02}
+              value={ambientMasterVolume}
+              onChange={(e) => {
+                const val = parseFloat(e.target.value);
+                setAmbientMasterVolume(val);
+                multiAmbientEngine?.setMasterVolume(val);
+              }}
+              className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-400"
+            />
+          </div>
 
           <div className="overflow-y-auto space-y-3 pr-1 flex-1 custom-scrollbar">
             {AVAILABLE_AMBIENT_LAYERS.map((layer) => {
