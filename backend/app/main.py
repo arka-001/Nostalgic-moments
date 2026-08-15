@@ -15,6 +15,7 @@ from app.api.categories import router as categories_router
 from app.api.songs import router as songs_router
 from app.api.uploads import router as uploads_router
 from app.api.analytics import router as analytics_router
+from app.api.youtube import router as youtube_router
 
 from app.db.session import engine, AsyncSessionLocal
 from app.db.base import Base
@@ -85,6 +86,7 @@ app.include_router(categories_router, prefix=settings.API_V1_STR, tags=["Categor
 app.include_router(songs_router, prefix=settings.API_V1_STR, tags=["Songs"])
 app.include_router(uploads_router, prefix=f"{settings.API_V1_STR}/admin", tags=["Uploads"])
 app.include_router(analytics_router, prefix=f"{settings.API_V1_STR}/analytics", tags=["Analytics"])
+app.include_router(youtube_router, prefix=settings.API_V1_STR, tags=["YouTube"])
 
 
 

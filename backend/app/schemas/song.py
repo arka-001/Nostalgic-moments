@@ -11,6 +11,9 @@ class SongBase(BaseModel):
     duration: Optional[float] = None
     audio_url: Optional[str] = None
     cover_url: Optional[str] = None
+    source_type: str = "uploaded"
+    youtube_video_id: Optional[str] = None
+    youtube_url: Optional[str] = None
     is_active: bool = True
 
 
@@ -25,6 +28,9 @@ class SongUpdate(BaseModel):
     duration: Optional[float] = None
     audio_url: Optional[str] = None
     cover_url: Optional[str] = None
+    source_type: Optional[str] = None
+    youtube_video_id: Optional[str] = None
+    youtube_url: Optional[str] = None
     is_active: Optional[bool] = None
     category_ids: Optional[List[uuid.UUID]] = None
 

@@ -4,6 +4,7 @@ from pydantic import BaseModel
 
 class TrackPlayRequest(BaseModel):
     event_type: str = "play"
+    session_id: Optional[str] = None
     category_slug: Optional[str] = None
     category_name: Optional[str] = None
     song_id: Optional[str] = None

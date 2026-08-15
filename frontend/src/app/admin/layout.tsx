@@ -15,6 +15,8 @@ import {
   ExternalLink,
   Shield,
   FileCode2,
+  Youtube,
+  Globe,
 } from "lucide-react";
 import { fetchMe, logoutAdmin } from "@/lib/api";
 
@@ -22,6 +24,8 @@ const navItems = [
   { label: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard },
   { label: "Environments & Sounds", href: "/admin/categories", icon: FolderOpen },
   { label: "Music & Audio Tracks", href: "/admin/songs", icon: Music },
+  { label: "YouTube Integration", href: "/admin/youtube", icon: Youtube },
+  { label: "Live Visitors & IP", href: "/admin/visitors", icon: Globe },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

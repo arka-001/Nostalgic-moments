@@ -50,11 +50,54 @@ export interface Song {
   duration?: number;
   audio_url?: string;
   cover_url?: string;
+  source_type?: "uploaded" | "youtube";
+  youtube_video_id?: string;
+  youtube_url?: string;
   is_active: boolean;
   sort_order?: number;
   created_at?: string;
   updated_at?: string;
   category_ids?: string[];
+}
+
+export interface YouTubeSettings {
+  is_enabled: boolean;
+  is_configured: boolean;
+  masked_key: string;
+  updated_at?: string;
+}
+
+export interface YouTubeConnectionTestResponse {
+  success: boolean;
+  message: string;
+}
+
+export interface YouTubePlaylist {
+  id: string;
+  playlist_id: string;
+  title: string;
+  description?: string;
+  thumbnail_url?: string;
+  category_id: string;
+  category_name?: string;
+  category_slug?: string;
+  song_count: number;
+  is_active: boolean;
+  last_synced_at?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface YouTubeImportResult {
+  playlist_title: string;
+  playlist_id: string;
+  category: string;
+  total_items: number;
+  imported: number;
+  already_existing: number;
+  skipped: number;
+  order_updated: boolean;
+  skipped_reasons: string[];
 }
 
 export interface PlaylistSongResponse extends Song {
@@ -153,6 +196,73 @@ export interface AudioPlayerState {
   queue: Song[];
   currentIndex: number;
   isFullscreen: boolean;
+}
+
+export interface VisitorSession {
+  id: string;
+  session_id: string;
+  ip_address: string;
+  country?: string;
+  country_code?: string;
+  city?: string;
+  region?: string;
+  latitude?: number;
+  longitude?: number;
+  isp?: string;
+  device?: string;
+  browser?: string;
+  os?: string;
+  current_path?: string;
+  current_environment?: string;
+  current_song_title?: string;
+  current_song_artist?: string;
+  is_playing: boolean;
+  is_online: boolean;
+  is_blocked?: boolean;
+  total_duration_listened: number;
+  total_visits: number;
+  first_seen_at: string;
+  last_seen_at: string;
+}
+
+export interface GeoDistributionItem {
+  name: string;
+  code?: string;
+  count: number;
+  percentage: number;
+}
+
+export interface GeoMapPoint {
+  city: string;
+  country: string;
+  country_code: string;
+  latitude: number;
+  longitude: number;
+  active_listeners: number;
+  total_sessions: number;
+}
+
+export interface VisitorTelemetrySummary {
+  live_online_count: number;
+  total_unique_visitors: number;
+  total_countries_reached: number;
+  top_countries: GeoDistributionItem[];
+  top_cities: GeoDistributionItem[];
+  device_breakdown: GeoDistributionItem[];
+  browser_breakdown: GeoDistributionItem[];
+  geo_map_points?: GeoMapPoint[];
+  visitors: VisitorSession[];
+  total_records: number;
+}
+
+export interface HeartbeatPayload {
+  session_id: string;
+  current_path?: string;
+  current_environment?: string;
+  current_song_title?: string;
+  current_song_artist?: string;
+  is_playing: boolean;
+  duration_increment?: number;
 }
 
 

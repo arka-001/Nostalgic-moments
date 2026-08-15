@@ -44,6 +44,10 @@ class Settings(BaseSettings):
     INITIAL_ADMIN_EMAIL: str = "admin@nostalgia.com"
     INITIAL_ADMIN_PASSWORD: str = "AdminSecurePass2026!"
 
+    # YouTube Integration & Encryption
+    YOUTUBE_API_KEY: str = "AIzaFAKE_NOSTALGIC_MOMENTS_TEST_KEY_123456789"
+    YOUTUBE_API_ENCRYPTION_KEY: str = "nostalgic-moments-youtube-aes-secret-key-32b"
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

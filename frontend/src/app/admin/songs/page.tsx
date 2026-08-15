@@ -4,7 +4,7 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import {
   Plus, Pencil, Trash2, Loader2, X, Music, Upload,
   Save, ToggleLeft, ToggleRight, FolderOpen, ArrowUp, ArrowDown,
-  GripVertical, Search,
+  GripVertical, Search, Youtube, ExternalLink,
 } from "lucide-react";
 import {
   fetchSongs,
@@ -341,75 +341,109 @@ export default function AdminSongsPage() {
                 <tr className="border-b border-slate-800 text-xs uppercase text-slate-400 tracking-wider">
                   <th className="px-6 py-4 text-left">Song</th>
                   <th className="px-4 py-4 text-left hidden md:table-cell">Artist</th>
+                  <th className="px-4 py-4 text-center">Source</th>
                   <th className="px-4 py-4 text-center hidden lg:table-cell">Duration</th>
-                  <th className="px-4 py-4 text-center">Audio</th>
+                  <th className="px-4 py-4 text-center">Media</th>
                   <th className="px-4 py-4 text-center">Status</th>
                   <th className="px-4 py-4 text-center">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
-                {songs.map((song) => (
-                  <tr key={song.id} className="hover:bg-slate-800/30 transition">
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-slate-800 border border-slate-700 overflow-hidden shrink-0 flex items-center justify-center">
-                          {song.cover_url ? (
-                            <img src={song.cover_url} alt="" className="w-full h-full object-cover" />
-                          ) : (
-                            <Music className="w-4 h-4 text-slate-500" />
-                          )}
+                {songs.map((song) => {
+                  const isYouTube = song.source_type === "youtube" || Boolean(song.youtube_video_id);
+                  return (
+                    <tr key={song.id} className="hover:bg-slate-800/30 transition">
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-slate-800 border border-slate-700 overflow-hidden shrink-0 flex items-center justify-center">
+                            {song.cover_url ? (
+                              <img src={song.cover_url} alt="" className="w-full h-full object-cover" />
+                            ) : isYouTube ? (
+                              <Youtube className="w-4 h-4 text-red-400" />
+                            ) : (
+                              <Music className="w-4 h-4 text-slate-500" />
+                            )}
+                          </div>
+                          <div className="min-w-0 max-w-xs">
+                            <span className="font-medium text-slate-200 truncate block">
+                              {song.title}
+                            </span>
+                            {isYouTube && song.youtube_url && (
+                              <a
+                                href={song.youtube_url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-[11px] text-red-400/80 hover:text-red-300 font-mono inline-flex items-center gap-1"
+                              >
+                                <span>Open YouTube</span>
+                                <ExternalLink className="w-2.5 h-2.5" />
+                              </a>
+                            )}
+                          </div>
                         </div>
-                        <span className="font-medium text-slate-200 truncate max-w-xs">
-                          {song.title}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-4 hidden md:table-cell text-slate-400">
-                      {song.artist}
-                    </td>
-                    <td className="px-4 py-4 text-center hidden lg:table-cell font-mono text-slate-400 text-xs">
-                      {formatDuration(song.duration)}
-                    </td>
-                    <td className="px-4 py-4 text-center">
-                      {song.audio_url ? (
-                        <span className="inline-flex items-center gap-1 text-xs text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded-full border border-emerald-500/20">
-                          ✓ Media URL
-                        </span>
-                      ) : (
-                        <span className="text-xs text-slate-500">No audio</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-4 text-center">
-                      <button onClick={() => toggleActive(song)} className="text-xs">
-                        {song.is_active ? (
-                          <span className="flex items-center gap-1 text-emerald-400">
-                            <ToggleRight className="w-5 h-5" /> Active
+                      </td>
+                      <td className="px-4 py-4 hidden md:table-cell text-slate-400">
+                        {song.artist}
+                      </td>
+                      <td className="px-4 py-4 text-center">
+                        {isYouTube ? (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-mono text-red-400 bg-red-500/10 px-2 py-0.5 rounded-full border border-red-500/20">
+                            <Youtube className="w-3 h-3" /> YouTube
                           </span>
                         ) : (
-                          <span className="flex items-center gap-1 text-slate-500">
-                            <ToggleLeft className="w-5 h-5" /> Off
+                          <span className="inline-flex items-center gap-1 text-[11px] font-mono text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
+                            <Music className="w-3 h-3" /> Uploaded
                           </span>
                         )}
-                      </button>
-                    </td>
-                    <td className="px-4 py-4">
-                      <div className="flex items-center justify-center gap-2">
-                        <button
-                          onClick={() => openEdit(song)}
-                          className="p-2 rounded-lg text-slate-400 hover:text-amber-400 hover:bg-amber-500/10 transition"
-                        >
-                          <Pencil className="w-4 h-4" />
+                      </td>
+                      <td className="px-4 py-4 text-center hidden lg:table-cell font-mono text-slate-400 text-xs">
+                        {formatDuration(song.duration)}
+                      </td>
+                      <td className="px-4 py-4 text-center">
+                        {isYouTube ? (
+                          <span className="inline-flex items-center gap-1 text-xs text-red-300 bg-red-500/10 px-2 py-1 rounded-full border border-red-500/20">
+                            ✓ YouTube Stream
+                          </span>
+                        ) : song.audio_url ? (
+                          <span className="inline-flex items-center gap-1 text-xs text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded-full border border-emerald-500/20">
+                            ✓ Media URL
+                          </span>
+                        ) : (
+                          <span className="text-xs text-slate-500">No audio</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-4 text-center">
+                        <button onClick={() => toggleActive(song)} className="text-xs">
+                          {song.is_active ? (
+                            <span className="flex items-center gap-1 text-emerald-400">
+                              <ToggleRight className="w-5 h-5" /> Active
+                            </span>
+                          ) : (
+                            <span className="flex items-center gap-1 text-slate-500">
+                              <ToggleLeft className="w-5 h-5" /> Off
+                            </span>
+                          )}
                         </button>
-                        <button
-                          onClick={() => handleDelete(song)}
-                          className="p-2 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="flex items-center justify-center gap-2">
+                          <button
+                            onClick={() => openEdit(song)}
+                            className="p-2 rounded-lg text-slate-400 hover:text-amber-400 hover:bg-amber-500/10 transition"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(song)}
+                            className="p-2 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

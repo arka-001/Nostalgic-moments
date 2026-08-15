@@ -4,13 +4,48 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { CategoryDetail } from "@/types";
 import { useAudioPlayer } from "@/hooks/useAudioPlayer";
-import { ambientEngine, AmbientType } from "@/lib/ambientSoundscapes";
-import { trackPlaybackEvent } from "@/lib/api";
+import {
+  multiAmbientEngine,
+  AVAILABLE_AMBIENT_LAYERS,
+  MultiLayerStateMap,
+} from "@/lib/ambientSoundscapes";
+import { trackPlaybackEvent, sendHeartbeat } from "@/lib/api";
+import VintageCassettePlayer from "@/components/player/VintageCassettePlayer";
 
 import {
-  ArrowLeft, Radio, Music, Play, Pause, SkipBack, SkipForward,
-  Volume2, Volume1, VolumeX, Shuffle, Repeat, Repeat1, ListMusic, ChevronDown,
-  Sparkles, Sliders, Wind, CloudRain, Coffee, Scissors, Train, Disc
+  ArrowLeft,
+  Radio,
+  Music,
+  Play,
+  Pause,
+  SkipBack,
+  SkipForward,
+  Volume2,
+  Volume1,
+  VolumeX,
+  Shuffle,
+  Repeat,
+  Repeat1,
+  ListMusic,
+  ChevronDown,
+  Sparkles,
+  Sliders,
+  Wind,
+  CloudRain,
+  CloudLightning,
+  Coffee,
+  Scissors,
+  Train,
+  Disc,
+  Heart,
+  Moon,
+  Clock,
+  Layers,
+  Trees,
+  Car,
+  X,
+  Check,
+  Search,
 } from "lucide-react";
 
 interface ExperienceClientProps {
@@ -39,164 +74,125 @@ export default function ExperienceClient({ category }: ExperienceClientProps) {
   } = useAudioPlayer(category.songs);
 
   const [showPlaylist, setShowPlaylist] = useState(false);
+  const [queueSearch, setQueueSearch] = useState("");
   const [showVolume, setShowVolume] = useState(false);
   const [showAmbientControls, setShowAmbientControls] = useState(false);
+  const [showSleepTimerModal, setShowSleepTimerModal] = useState(false);
+  const [showCassettePlayer, setShowCassettePlayer] = useState(false);
   const [bgLoaded, setBgLoaded] = useState(false);
   const [retroFilter, setRetroFilter] = useState(false);
+  const bgImgRef = useRef<HTMLImageElement>(null);
 
-  // Get environment-specific ambient preset (Admin customizable via CMS)
-  const getCategoryAmbientConfig = () => {
-    const adminType = category.theme_config?.ambient_sound_type;
-    const adminName = category.theme_config?.ambient_sound_name;
-    const adminDesc = category.theme_config?.ambient_sound_description;
-    const adminUrl = category.theme_config?.ambient_sound_url;
-    const adminVol = category.theme_config?.ambient_default_volume;
+  // ── MULTI-LAYER AMBIENT MIXER STATE ──
+  const [ambientStateMap, setAmbientStateMap] = useState<MultiLayerStateMap>({});
 
-    const slug = category.slug.toLowerCase();
-    let soundType: AmbientType = "vinyl";
-    let defaultName = "Vintage Vinyl Warmth";
-    let defaultDesc = "Warm analog vinyl needle & dust texture";
-    let Icon = Disc;
-
-    if (adminType && adminType !== "auto") {
-      soundType = adminType;
-      if (soundType === "bus") {
-        defaultName = "Bus Engine & Road Breeze";
-        defaultDesc = "Low-frequency engine hum & open-window air";
-        Icon = Wind;
-      } else if (soundType === "car_rain") {
-        defaultName = "Rain on Windshield";
-        defaultDesc = "Gentle rain on glass & quiet highway drone";
-        Icon = CloudRain;
-      } else if (soundType === "chai") {
-        defaultName = "Chai Stall Atmosphere";
-        defaultDesc = "Roadside chatter & warm kettle ambience";
-        Icon = Coffee;
-      } else if (soundType === "salon") {
-        defaultName = "Salon Acoustics & Cassette";
-        defaultDesc = "Vintage salon room tone & tape hiss";
-        Icon = Scissors;
-      } else if (soundType === "train") {
-        defaultName = "Railway Platform & Tracks";
-        defaultDesc = "Platform echoes & rhythmic track clicks";
-        Icon = Train;
-      } else if (soundType === "custom_url") {
-        defaultName = "Custom Atmosphere Loop";
-        defaultDesc = "Streaming custom ambient audio track";
-        Icon = Music;
-      } else if (soundType === "off") {
-        defaultName = "Ambient Muted";
-        defaultDesc = "Ambient sound disabled for this environment";
-        Icon = VolumeX;
-      }
-    } else {
-      if (slug.includes("bus")) {
-        soundType = "bus";
-        defaultName = "Bus Engine & Road Breeze";
-        defaultDesc = "Low-frequency engine hum & open-window air";
-        Icon = Wind;
-      } else if (slug.includes("car")) {
-        soundType = "car_rain";
-        defaultName = "Rain on Windshield";
-        defaultDesc = "Gentle rain on glass & quiet highway drone";
-        Icon = CloudRain;
-      } else if (slug.includes("tea") || slug.includes("chai")) {
-        soundType = "chai";
-        defaultName = "Chai Stall Atmosphere";
-        defaultDesc = "Roadside chatter & warm kettle ambience";
-        Icon = Coffee;
-      } else if (slug.includes("salon")) {
-        soundType = "salon";
-        defaultName = "Salon Acoustics & Cassette";
-        defaultDesc = "Vintage salon room tone & tape hiss";
-        Icon = Scissors;
-      } else if (slug.includes("train") || slug.includes("railway")) {
-        soundType = "train";
-        defaultName = "Railway Platform & Tracks";
-        defaultDesc = "Platform echoes & rhythmic track clicks";
-        Icon = Train;
-      }
+  useEffect(() => {
+    if (multiAmbientEngine) {
+      const unsub = multiAmbientEngine.subscribe((state) => {
+        setAmbientStateMap(state);
+      });
+      return unsub;
     }
+  }, []);
 
-    return {
-      type: soundType,
-      name: adminName && adminName.trim() ? adminName.trim() : defaultName,
-      description: adminDesc && adminDesc.trim() ? adminDesc.trim() : defaultDesc,
-      customUrl: adminUrl,
-      defaultVolume: typeof adminVol === "number" ? adminVol / 100 : 0.25,
-      icon: Icon,
-      isOffByDefault: soundType === "off",
-    };
+  // ── FAVORITES SYSTEM (localStorage) ──
+  const [favoriteSongIds, setFavoriteSongIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("nostalgic_favorites");
+      if (saved) {
+        setFavoriteSongIds(JSON.parse(saved));
+      }
+    } catch (_) {}
+  }, []);
+
+  const toggleFavorite = (songId?: string) => {
+    const targetId = songId || currentSong?.id;
+    if (!targetId) return;
+
+    setFavoriteSongIds((prev) => {
+      const updated = prev.includes(targetId)
+        ? prev.filter((id) => id !== targetId)
+        : [...prev, targetId];
+      try {
+        localStorage.setItem("nostalgic_favorites", JSON.stringify(updated));
+      } catch (_) {}
+      return updated;
+    });
   };
 
-  const envAmbient = getCategoryAmbientConfig();
-  const [ambientEnabled, setAmbientEnabled] = useState<boolean>(!envAmbient.isOffByDefault);
-  const [ambientVolume, setAmbientVolume] = useState<number>(envAmbient.defaultVolume);
+  const isCurrentFavorite = currentSong?.id ? favoriteSongIds.includes(currentSong.id) : false;
 
-  // Initialize and clean up ambient audio specifically for this category
+  // ── SLEEP TIMER & FADE-OUT ENGINE ──
+  const [sleepTimerMinutes, setSleepTimerMinutes] = useState<number | null>(null);
+  const [sleepTimerRemainingSec, setSleepTimerRemainingSec] = useState<number | null>(null);
+  const sleepTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const isFadingOutRef = useRef(false);
+
+  const setSleepTimer = (minutes: number | null) => {
+    if (sleepTimerRef.current) clearInterval(sleepTimerRef.current);
+    isFadingOutRef.current = false;
+    setSleepTimerMinutes(minutes);
+
+    if (minutes === null) {
+      setSleepTimerRemainingSec(null);
+      return;
+    }
+
+    const totalSeconds = minutes * 60;
+    setSleepTimerRemainingSec(totalSeconds);
+
+    sleepTimerRef.current = setInterval(() => {
+      setSleepTimerRemainingSec((prev) => {
+        if (prev === null || prev <= 1) {
+          if (sleepTimerRef.current) clearInterval(sleepTimerRef.current);
+          // Trigger complete stop
+          if (multiAmbientEngine) multiAmbientEngine.stopAll();
+          if (isPlaying) togglePlay();
+          setSleepTimerMinutes(null);
+          return null;
+        }
+
+        // Smooth fade-out in final 20 seconds
+        if (prev <= 20 && !isFadingOutRef.current) {
+          isFadingOutRef.current = true;
+          if (multiAmbientEngine) {
+            multiAmbientEngine.fadeOutAll(20);
+          }
+        }
+
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
   useEffect(() => {
-    if (ambientEngine) {
-      if (ambientEnabled && envAmbient.type !== "off") {
-        ambientEngine.play(envAmbient.type, envAmbient.customUrl);
-        ambientEngine.setVolume(ambientVolume);
-      } else {
-        ambientEngine.stop();
-      }
+    return () => {
+      if (sleepTimerRef.current) clearInterval(sleepTimerRef.current);
+    };
+  }, []);
+
+  // Auto-detect cached background image completion
+  useEffect(() => {
+    if (bgImgRef.current && (bgImgRef.current.complete || bgImgRef.current.naturalWidth > 0)) {
+      setBgLoaded(true);
+    }
+  }, [category.background_url, category.thumbnail_url]);
+
+  // Ensure ambient audio starts stopped on page load (user manually turns on if desired)
+  useEffect(() => {
+    if (multiAmbientEngine) {
+      multiAmbientEngine.stopAll();
     }
     return () => {
-      if (ambientEngine) {
-        ambientEngine.stop();
-      }
+      if (multiAmbientEngine) multiAmbientEngine.stopAll();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [category.slug, ambientEnabled, envAmbient.type, envAmbient.customUrl]);
+  }, [category.slug]);
 
-  const handleToggleAmbient = () => {
-    const nextState = !ambientEnabled;
-    setAmbientEnabled(nextState);
-    if (ambientEngine) {
-      if (nextState && envAmbient.type !== "off") {
-        ambientEngine.play(envAmbient.type, envAmbient.customUrl);
-        ambientEngine.setVolume(ambientVolume);
-      } else {
-        ambientEngine.stop();
-      }
-    }
-  };
-
-
-  const handleAmbientVolumeChange = (vol: number) => {
-    setAmbientVolume(vol);
-    if (ambientEngine && ambientEnabled) {
-      ambientEngine.setVolume(vol);
-    }
-  };
-
-  const hasSongs = category.songs.length > 0;
-
-  // Track playback analytics
-  const lastTrackedSongId = useRef<string | null>(null);
-  useEffect(() => {
-    if (currentSong && isPlaying && lastTrackedSongId.current !== currentSong.id) {
-      lastTrackedSongId.current = currentSong.id;
-      trackPlaybackEvent({
-        event_type: "play",
-        category_slug: category.slug,
-        category_name: category.name,
-        song_id: currentSong.id,
-        song_title: currentSong.title,
-        song_artist: currentSong.artist,
-        duration_listened: currentSong.duration || 180,
-      });
-    }
-  }, [currentSong, isPlaying, category.slug, category.name]);
-
-
-
-  const rawOpacity = category.theme_config?.player_transparency ?? 10;
-  const playerOpacity = Math.min(90, Math.max(8, rawOpacity)) / 100;
+  // Theme Config Defaults
+  const playerOpacity = (category.theme_config?.player_transparency ?? 20) / 100;
   const playerBg = `rgba(0, 0, 0, ${playerOpacity})`;
-  const playlistBg = `rgba(0, 0, 0, ${Math.max(0.15, playerOpacity)})`;
 
   const playlistRef = useRef<HTMLDivElement>(null);
   const volumeWrapRef = useRef<HTMLDivElement>(null);
@@ -209,7 +205,46 @@ export default function ExperienceClient({ category }: ExperienceClientProps) {
     return `${Math.floor(s / 60)}:${Math.floor(s % 60).toString().padStart(2, "0")}`;
   };
 
-  const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
+  // Draggable seek scrubber
+  const [isDraggingSeek, setIsDraggingSeek] = useState(false);
+  const [dragSeekTime, setDragSeekTime] = useState<number | null>(null);
+
+  const handleSeekPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!category.songs.length || !duration) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    const targetTime = ratio * duration;
+    setIsDraggingSeek(true);
+    setDragSeekTime(targetTime);
+    seek(targetTime);
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch (_) {}
+  };
+
+  const handleSeekPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isDraggingSeek || !duration) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    const targetTime = ratio * duration;
+    setDragSeekTime(targetTime);
+    seek(targetTime);
+  };
+
+  const handleSeekPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isDraggingSeek) return;
+    if (dragSeekTime !== null && duration) {
+      seek(dragSeekTime);
+    }
+    setIsDraggingSeek(false);
+    setDragSeekTime(null);
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch (_) {}
+  };
+
+  const currentDisplayTime = isDraggingSeek && dragSeekTime !== null ? dragSeekTime : currentTime;
+  const progress = duration > 0 ? (currentDisplayTime / duration) * 100 : 0;
   const effectiveVolume = isMuted ? 0 : volume;
 
   const openVolume = () => {
@@ -220,10 +255,8 @@ export default function ExperienceClient({ category }: ExperienceClientProps) {
     if (volumeCloseTimer.current) clearTimeout(volumeCloseTimer.current);
     volumeCloseTimer.current = setTimeout(() => setShowVolume(false), delay);
   };
-  useEffect(() => () => {
-    if (volumeCloseTimer.current) clearTimeout(volumeCloseTimer.current);
-  }, []);
 
+  // Close modals on outside click & shortcuts
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (showPlaylist && playlistRef.current && !playlistRef.current.contains(e.target as Node)) {
@@ -236,13 +269,12 @@ export default function ExperienceClient({ category }: ExperienceClientProps) {
         setShowAmbientControls(false);
       }
     }
-    function handleKeyDown(e: KeyboardEvent) {
-      const tag = (e.target as HTMLElement)?.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA") return;
 
+    function handleKeyDown(e: KeyboardEvent) {
+      if (document.activeElement?.tagName === "INPUT" || document.activeElement?.tagName === "TEXTAREA") return;
       if (e.code === "Space") {
         e.preventDefault();
-        if (hasSongs) togglePlay();
+        if (category.songs.length) togglePlay();
       } else if (e.code === "ArrowUp") {
         e.preventDefault();
         setVolume(Math.min(1, effectiveVolume + 0.05));
@@ -259,6 +291,8 @@ export default function ExperienceClient({ category }: ExperienceClientProps) {
         setShowPlaylist(false);
         setShowVolume(false);
         setShowAmbientControls(false);
+        setShowSleepTimerModal(false);
+        setShowCassettePlayer(false);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
@@ -267,14 +301,38 @@ export default function ExperienceClient({ category }: ExperienceClientProps) {
       document.removeEventListener("mousedown", handleClickOutside);
       window.removeEventListener("keydown", handleKeyDown);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showPlaylist, showVolume, showAmbientControls, hasSongs, effectiveVolume]);
+  }, [showPlaylist, showVolume, showAmbientControls, effectiveVolume, togglePlay, setVolume, toggleMute, category.songs.length]);
 
   useEffect(() => {
     if (showPlaylist && activeTrackRef.current) {
       activeTrackRef.current.scrollIntoView({ block: "nearest", behavior: "smooth" });
     }
   }, [showPlaylist]);
+
+  // Periodic Visitor Heartbeat (every 30s)
+  useEffect(() => {
+    sendHeartbeat({
+      current_path: `/experience/${category.slug}`,
+      current_environment: category.name,
+      current_song_title: currentSong?.title,
+      current_song_artist: currentSong?.artist,
+      is_playing: isPlaying,
+      duration_increment: 0,
+    });
+
+    const interval = setInterval(() => {
+      sendHeartbeat({
+        current_path: `/experience/${category.slug}`,
+        current_environment: category.name,
+        current_song_title: currentSong?.title,
+        current_song_artist: currentSong?.artist,
+        is_playing: isPlaying,
+        duration_increment: isPlaying ? 30 : 0,
+      });
+    }, 30000);
+
+    return () => clearInterval(interval);
+  }, [category.slug, category.name, currentSong?.title, currentSong?.artist, isPlaying]);
 
   const handleVolumeWheel = (e: React.WheelEvent) => {
     e.preventDefault();
@@ -288,18 +346,40 @@ export default function ExperienceClient({ category }: ExperienceClientProps) {
   const RepeatIcon = repeatMode === "one" ? Repeat1 : Repeat;
 
   const [mouseOffset, setMouseOffset] = useState({ x: 0, y: 0 });
-
   const handleMouseMove = (e: React.MouseEvent) => {
     const { clientX, clientY } = e;
     const windowWidth = window.innerWidth;
     const windowHeight = window.innerHeight;
-
     const x = (clientX - windowWidth / 2) / 50;
     const y = (clientY - windowHeight / 2) / 50;
     setMouseOffset({ x, y });
   };
 
+  const hasSongs = category.songs.length > 0;
+  const activeAmbientLayersCount = Object.values(ambientStateMap).filter((s) => s.isPlaying).length;
 
+  const getLayerIcon = (iconName: string) => {
+    switch (iconName) {
+      case "CloudRain":
+        return <CloudRain className="w-4 h-4 text-cyan-400" />;
+      case "CloudLightning":
+        return <CloudLightning className="w-4 h-4 text-purple-400" />;
+      case "Bus":
+        return <Wind className="w-4 h-4 text-amber-400" />;
+      case "Coffee":
+        return <Coffee className="w-4 h-4 text-orange-400" />;
+      case "Scissors":
+        return <Scissors className="w-4 h-4 text-emerald-400" />;
+      case "Trees":
+        return <Trees className="w-4 h-4 text-green-400" />;
+      case "Train":
+        return <Train className="w-4 h-4 text-blue-400" />;
+      case "Car":
+        return <Car className="w-4 h-4 text-indigo-400" />;
+      default:
+        return <Wind className="w-4 h-4 text-slate-400" />;
+    }
+  };
 
   return (
     <div
@@ -315,28 +395,31 @@ export default function ExperienceClient({ category }: ExperienceClientProps) {
           transform: `translate3d(${mouseOffset.x}px, ${mouseOffset.y}px, 0px)`,
         }}
       >
-        {category.background_url ? (
-          category.background_type === "video" ? (
+        {category.background_url || category.thumbnail_url ? (
+          category.background_type === "video" && category.background_url ? (
             <video
               src={category.background_url}
-              autoPlay loop muted playsInline
+              autoPlay
+              loop
+              muted
+              playsInline
               onLoadedData={() => setBgLoaded(true)}
-              className={`w-full h-full object-cover animate-ambient-pan transition-opacity duration-1000 ${bgLoaded ? "opacity-100" : "opacity-0"}`}
+              className="w-full h-full object-cover animate-ambient-pan transition-opacity duration-700 opacity-100"
             />
           ) : (
             <img
-              src={category.background_url}
+              ref={bgImgRef}
+              src={category.background_url || category.thumbnail_url}
               alt={category.name}
+              loading="eager"
+              decoding="async"
               onLoad={() => setBgLoaded(true)}
-              className={`w-full h-full object-cover animate-ambient-pan transition-opacity duration-1000 ${bgLoaded ? "opacity-100" : "opacity-0"}`}
+              onError={() => setBgLoaded(true)}
+              className="w-full h-full object-cover animate-ambient-pan transition-opacity duration-700 opacity-100"
             />
           )
         ) : (
           <div className="w-full h-full bg-gradient-to-br from-amber-950 via-slate-900 to-stone-950 animate-ambient-pan" />
-        )}
-
-        {category.background_url && !bgLoaded && (
-          <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 animate-pulse" />
         )}
 
         {/* Ambient Animated Dust / Light Particles Overlay */}
@@ -362,224 +445,354 @@ export default function ExperienceClient({ category }: ExperienceClientProps) {
           <span className="hidden xs:inline">Exit Environment</span>
         </Link>
 
-        {/* Center/Right Ambient Sound & Retro Atmosphere Controls */}
-        <div className="flex items-center gap-2 sm:gap-3">
-          {/* Retro Film Mode Switch */}
+        {/* Action Controls in Header */}
+        <div className="flex items-center gap-2">
+          {/* Cassette Mode Button */}
           <button
-            onClick={() => setRetroFilter((v) => !v)}
-            className={`hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-mono backdrop-blur-xl transition ${
-              retroFilter
-                ? "bg-amber-500/30 border-amber-400 text-amber-200 shadow-md shadow-amber-500/20"
-                : "bg-black/25 border-white/20 text-slate-300 hover:text-white"
-            }`}
-            title="Toggle Retro Film Grain & Sepia Atmosphere"
+            onClick={() => setShowCassettePlayer(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/30 hover:bg-black/50 border border-white/20 text-amber-300 hover:text-amber-200 text-xs font-mono backdrop-blur-xl transition hover:scale-105 shadow-md"
+            title="Open Vintage Cassette Deck View"
           >
-            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-            <span>Retro FX</span>
+            <Disc className="w-3.5 h-3.5 text-amber-400 animate-spin" style={{ animationDuration: isPlaying ? "3s" : "0s" }} />
+            <span className="hidden sm:inline">Cassette Deck</span>
           </button>
 
-          {/* Ambient Sound Popover Button */}
-          <div ref={ambientWrapRef} className="relative">
-            <button
-              onClick={() => setShowAmbientControls((v) => !v)}
-              className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full border text-xs font-mono backdrop-blur-xl transition shadow-md ${
-                ambientEnabled
-                  ? "bg-amber-500/20 border-amber-400/50 text-amber-300"
-                  : "bg-black/25 border-white/20 text-slate-300 hover:text-white"
-              }`}
-              title={`Configure ${envAmbient.name}`}
-            >
-              <envAmbient.icon className={`w-3.5 h-3.5 text-amber-400 ${ambientEnabled ? "animate-pulse" : ""}`} />
-              <span className="hidden sm:inline">
-                {ambientEnabled ? `${envAmbient.name}` : "Ambient: Off"}
+          {/* Sleep Timer Button */}
+          <button
+            onClick={() => setShowSleepTimerModal((v) => !v)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-mono backdrop-blur-xl transition hover:scale-105 shadow-md ${
+              sleepTimerMinutes !== null
+                ? "bg-purple-500/20 border-purple-500/40 text-purple-300"
+                : "bg-black/30 hover:bg-black/50 border-white/20 text-slate-300"
+            }`}
+            title="Sleep Timer"
+          >
+            <Moon className="w-3.5 h-3.5 text-purple-400" />
+            <span>
+              {sleepTimerRemainingSec !== null
+                ? `${Math.floor(sleepTimerRemainingSec / 60)}:${String(sleepTimerRemainingSec % 60).padStart(2, "0")}`
+                : "Sleep"}
+            </span>
+          </button>
+
+          {/* Ambient Mixer Button */}
+          <button
+            onClick={() => setShowAmbientControls((v) => !v)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-mono backdrop-blur-xl transition hover:scale-105 shadow-md ${
+              activeAmbientLayersCount > 0
+                ? "bg-amber-500/20 border-amber-500/40 text-amber-300"
+                : "bg-black/30 hover:bg-black/50 border-white/20 text-slate-300"
+            }`}
+            title="Multi-Layer Ambient Soundscape Mixer"
+          >
+            <Sliders className="w-3.5 h-3.5 text-amber-400" />
+            <span>Ambience</span>
+            {activeAmbientLayersCount > 0 && (
+              <span className="w-4 h-4 rounded-full bg-amber-400 text-slate-950 text-[10px] font-bold flex items-center justify-center">
+                {activeAmbientLayersCount}
               </span>
-              <span className="sm:hidden">{ambientEnabled ? "Ambient On" : "Ambient Off"}</span>
-            </button>
-
-            {/* Environment-Specific Ambient Soundscape Drawer */}
-            {showAmbientControls && (
-              <div className="absolute right-0 top-10 mt-2 w-72 p-4 rounded-2xl bg-black/85 border border-white/20 backdrop-blur-2xl shadow-2xl z-50 animate-in fade-in slide-in-from-top-2 duration-200">
-                <div className="flex items-center justify-between pb-3 border-b border-white/10 mb-3">
-                  <span className="text-xs font-semibold uppercase tracking-wider text-amber-300 font-mono flex items-center gap-1.5">
-                    <envAmbient.icon className="w-3.5 h-3.5" /> {envAmbient.name}
-                  </span>
-                  <span className="text-[10px] font-mono text-slate-400">
-                    {ambientEnabled ? `${Math.round(ambientVolume * 100)}% Vol` : "Muted"}
-                  </span>
-                </div>
-
-                <p className="text-[11px] text-slate-300 font-sans mb-3 leading-relaxed">
-                  {envAmbient.description}
-                </p>
-
-                {/* On / Off Toggle Switch */}
-                <div className="flex items-center justify-between p-2 rounded-xl bg-white/5 border border-white/10 mb-3">
-                  <span className="text-xs text-slate-200 font-medium">Ambient Audio</span>
-                  <button
-                    onClick={handleToggleAmbient}
-                    className={`px-3 py-1 rounded-full text-xs font-mono font-semibold transition ${
-                      ambientEnabled
-                        ? "bg-amber-500 text-black shadow-sm"
-                        : "bg-white/10 text-slate-400 hover:text-slate-200"
-                    }`}
-                  >
-                    {ambientEnabled ? "ENABLED" : "MUTED"}
-                  </button>
-                </div>
-
-                {/* Ambient Volume Slider */}
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between text-[11px] font-mono text-slate-400">
-                    <span className="flex items-center gap-1">
-                      <Volume2 className="w-3 h-3 text-amber-400" /> Volume
-                    </span>
-                    <span>{Math.round(ambientVolume * 100)}%</span>
-                  </div>
-                  <input
-                    type="range"
-                    min={0}
-                    max={1}
-                    step={0.02}
-                    value={ambientEnabled ? ambientVolume : 0}
-                    disabled={!ambientEnabled}
-                    onChange={(e) => handleAmbientVolumeChange(parseFloat(e.target.value))}
-                    className="w-full h-1.5 accent-amber-400 bg-white/20 rounded-lg cursor-pointer disabled:opacity-30"
-                  />
-                </div>
-              </div>
             )}
-          </div>
+          </button>
 
-
-          <div className="text-right">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-black/25 border border-amber-400/30 text-amber-300 text-xs font-mono backdrop-blur-xl shadow-md">
-              <Radio className="w-3.5 h-3.5 animate-pulse text-amber-400" />
-              <span>{hasSongs ? (isPlaying ? "Live Scene" : "Paused") : "Scene Active"}</span>
-            </div>
-            <h1 className="text-base sm:text-2xl font-serif font-bold text-white mt-1 drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)] tracking-wide">
-              {category.name}
-            </h1>
-          </div>
+          {/* Playlist Button */}
+          <button
+            onClick={() => setShowPlaylist((v) => !v)}
+            aria-label="Toggle playlist drawer"
+            aria-expanded={showPlaylist}
+            className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-black/30 hover:bg-black/50 border border-white/20 text-white text-xs font-medium backdrop-blur-xl transition duration-300 hover:scale-105 active:scale-95 shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70"
+          >
+            <ListMusic className="w-4 h-4 text-amber-400" />
+            <span className="hidden sm:inline">Scene Queue</span>
+            <span className="font-mono text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-1.5 py-0.5 rounded-full">
+              {category.songs.length}
+            </span>
+          </button>
         </div>
       </header>
 
-      {/* Empty Playlist Notice */}
-      {!hasSongs && (
-        <div className="fixed inset-0 z-10 flex items-center justify-center p-6 pointer-events-none">
-          <div className="bg-black/40 border border-white/15 backdrop-blur-2xl rounded-3xl p-8 max-w-md text-center space-y-3 shadow-2xl pointer-events-auto">
-            <Music className="w-8 h-8 text-amber-400 mx-auto" />
-            <h2 className="text-lg font-serif font-bold text-amber-100">No tracks in this environment</h2>
-            <p className="text-xs text-slate-300 leading-relaxed font-sans">
-              Enjoy the ambient visuals of {category.name}. Add MP3 tracks to this environment via the Admin Portal to start streaming.
-            </p>
-            <Link
-              href="/"
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 hover:bg-white/20 text-white text-xs font-medium border border-white/20 transition mt-2"
+      {/* ── SLEEP TIMER MODAL ────────────────────────────────────────── */}
+      {showSleepTimerModal && (
+        <div className="fixed top-20 right-4 sm:right-6 z-40 w-72 rounded-3xl bg-slate-950/90 border border-purple-500/30 backdrop-blur-2xl shadow-2xl p-5 space-y-4 animate-in fade-in zoom-in-95 duration-150">
+          <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+            <div className="flex items-center gap-2 text-purple-300 font-serif font-bold text-sm">
+              <Moon className="w-4 h-4 text-purple-400" />
+              <span>Sleep Timer</span>
+            </div>
+            <button
+              onClick={() => setShowSleepTimerModal(false)}
+              className="text-slate-400 hover:text-slate-200"
             >
-              Back to Environments
-            </Link>
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          <p className="text-xs text-slate-400 leading-relaxed">
+            Gradually fades out music and ambient sounds before stopping playback.
+          </p>
+
+          <div className="grid grid-cols-2 gap-2">
+            {[15, 30, 45, 60].map((mins) => (
+              <button
+                key={mins}
+                onClick={() => {
+                  setSleepTimer(mins);
+                  setShowSleepTimerModal(false);
+                }}
+                className={`py-2 rounded-xl text-xs font-mono font-semibold transition border ${
+                  sleepTimerMinutes === mins
+                    ? "bg-purple-500/20 border-purple-500 text-purple-200 shadow-md shadow-purple-500/20"
+                    : "bg-slate-900 border-slate-800 text-slate-300 hover:border-slate-700"
+                }`}
+              >
+                {mins} Minutes
+              </button>
+            ))}
+          </div>
+
+          {sleepTimerMinutes !== null && (
+            <button
+              onClick={() => {
+                setSleepTimer(null);
+                setShowSleepTimerModal(false);
+              }}
+              className="w-full py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-xs font-mono text-rose-400 transition"
+            >
+              Turn Off Timer
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* ── MULTI-LAYER AMBIENT MIXER DRAWER / MODAL ─────────────────── */}
+      {showAmbientControls && (
+        <div
+          ref={ambientWrapRef}
+          className="fixed top-20 right-4 sm:right-6 z-40 w-[92%] sm:w-96 max-h-[75vh] rounded-3xl bg-slate-950/95 border border-amber-500/30 backdrop-blur-2xl shadow-2xl p-5 space-y-4 flex flex-col animate-in fade-in zoom-in-95 duration-200"
+        >
+          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+            <div className="flex items-center gap-2">
+              <Sliders className="w-4 h-4 text-amber-400" />
+              <h3 className="text-sm font-serif font-bold text-amber-100">
+                Multi-Layer Ambient Soundscape
+              </h3>
+            </div>
+            <button
+              onClick={() => setShowAmbientControls(false)}
+              className="text-slate-400 hover:text-slate-200"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          <p className="text-xs text-slate-400 leading-relaxed">
+            Layer and blend individual background textures simultaneously with the music.
+          </p>
+
+          <div className="overflow-y-auto space-y-3 pr-1 flex-1 custom-scrollbar">
+            {AVAILABLE_AMBIENT_LAYERS.map((layer) => {
+              const state = ambientStateMap[layer.id] || { isPlaying: false, volume: layer.defaultVolume, isMuted: false };
+
+              return (
+                <div
+                  key={layer.id}
+                  className={`p-3 rounded-2xl border transition-all ${
+                    state.isPlaying
+                      ? "bg-amber-950/30 border-amber-500/30 shadow-sm"
+                      : "bg-slate-900/60 border-slate-800/80 hover:border-slate-700"
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <div className="p-1.5 rounded-lg bg-slate-800 border border-slate-700">
+                        {getLayerIcon(layer.iconName)}
+                      </div>
+                      <span className="text-xs font-semibold text-slate-200">
+                        {layer.name}
+                      </span>
+                    </div>
+
+                    <button
+                      onClick={() => multiAmbientEngine?.toggleLayer(layer.id)}
+                      className={`px-2.5 py-1 rounded-full text-[11px] font-mono font-semibold transition ${
+                        state.isPlaying
+                          ? "bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20"
+                          : "bg-slate-800 text-slate-400 hover:text-slate-200"
+                      }`}
+                    >
+                      {state.isPlaying ? "Active" : "Off"}
+                    </button>
+                  </div>
+
+                  {state.isPlaying && (
+                    <div className="flex items-center gap-2 pt-1">
+                      <button
+                        onClick={() => multiAmbientEngine?.toggleLayerMute(layer.id)}
+                        className="text-slate-400 hover:text-amber-400 transition"
+                      >
+                        {state.isMuted || state.volume === 0 ? (
+                          <VolumeX className="w-3.5 h-3.5 text-rose-400" />
+                        ) : (
+                          <Volume2 className="w-3.5 h-3.5 text-amber-400" />
+                        )}
+                      </button>
+                      <input
+                        type="range"
+                        min={0}
+                        max={1}
+                        step={0.02}
+                        value={state.isMuted ? 0 : state.volume}
+                        onChange={(e) =>
+                          multiAmbientEngine?.setLayerVolume(layer.id, parseFloat(e.target.value))
+                        }
+                        className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-400"
+                      />
+                      <span className="text-[10px] font-mono text-amber-300 w-8 text-right tabular-nums">
+                        {Math.round((state.isMuted ? 0 : state.volume) * 100)}%
+                      </span>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="pt-2 border-t border-slate-800 flex items-center justify-between text-xs">
+            <span className="text-slate-400 font-mono">
+              {activeAmbientLayersCount} Layers Playing
+            </span>
+            <button
+              onClick={() => multiAmbientEngine?.stopAll()}
+              className="text-rose-400 hover:text-rose-300 font-mono"
+            >
+              Stop All Sounds
+            </button>
           </div>
         </div>
       )}
 
-      {/* ── PLAYLIST POPUP ───────────────────────────────────────────── */}
-      {showPlaylist && (
-        <div className="fixed inset-x-0 bottom-24 z-40 flex justify-center px-4">
+      {/* ── FLOATING GLASS PLAYER PILL & QUEUE POPOVER ──────────────── */}
+      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-30 w-[94%] max-w-lg">
+        {/* ── COMPACT SCENE QUEUE POPUP CARD (ANCHORED ABOVE PLAYER) ── */}
+        {showPlaylist && (
           <div
             ref={playlistRef}
-            className="w-full max-w-md backdrop-blur-2xl border border-white/20 rounded-3xl overflow-hidden shadow-[0_16px_48px_0_rgba(0,0,0,0.4)] animate-in fade-in slide-in-from-bottom-4 duration-300"
-            style={{ backgroundColor: playlistBg }}
+            className="absolute bottom-full mb-3 inset-x-0 rounded-3xl bg-slate-950/95 border border-white/20 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.9)] backdrop-blur-2xl p-4 flex flex-col space-y-3 animate-in fade-in slide-in-from-bottom-3 duration-200 z-50"
           >
-            <div className="flex items-center justify-between px-5 py-3.5 border-b border-white/15 bg-white/5">
+            {/* Popover Header */}
+            <div className="flex items-center justify-between border-b border-slate-800 pb-2">
               <div className="flex items-center gap-2">
-                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                <span className="text-xs font-mono uppercase tracking-widest text-amber-200">
-                  Playlist · {category.songs.length} Tracks
+                <ListMusic className="w-4 h-4 text-amber-400" />
+                <h3 className="text-sm font-serif font-bold text-amber-100">
+                  Scene Queue
+                </h3>
+                <span className="text-[10px] font-mono text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded-full border border-amber-500/30">
+                  {category.songs.length} tracks
                 </span>
               </div>
               <button
                 onClick={() => setShowPlaylist(false)}
-                aria-label="Close playlist"
-                className="text-slate-300 hover:text-white transition p-1 rounded-full hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70"
+                className="p-1 rounded-full text-slate-400 hover:text-white transition"
               >
-                <ChevronDown className="w-4 h-4" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            {hasSongs ? (
-              <div className="overflow-y-auto max-h-72 divide-y divide-white/10 p-1">
-                {category.songs.map((song, i) => {
+            {/* Real-time Search Input */}
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                type="text"
+                value={queueSearch}
+                onChange={(e) => setQueueSearch(e.target.value)}
+                placeholder="Search track or artist..."
+                className="w-full pl-9 pr-8 py-1.5 bg-slate-900/90 border border-slate-800 rounded-xl text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-400 font-sans transition"
+              />
+              {queueSearch && (
+                <button
+                  onClick={() => setQueueSearch("")}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            {/* Scrollable Song List */}
+            <div className="overflow-y-auto space-y-1.5 pr-1 custom-scrollbar max-h-56">
+              {category.songs
+                .filter((s) => {
+                  if (!queueSearch.trim()) return true;
+                  const q = queueSearch.toLowerCase();
+                  return (
+                    s.title.toLowerCase().includes(q) ||
+                    (s.artist && s.artist.toLowerCase().includes(q))
+                  );
+                })
+                .map((song, idx) => {
                   const isCurrent = currentSong?.id === song.id;
+                  const isFav = favoriteSongIds.includes(song.id);
+
                   return (
                     <div
                       key={song.id}
-                      ref={isCurrent ? activeTrackRef : undefined}
-                      role="button"
-                      tabIndex={0}
-                      aria-current={isCurrent}
-                      onClick={() => {
-                        playSong(song, category.songs);
-                        setShowPlaylist(false);
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault();
-                          playSong(song, category.songs);
-                          setShowPlaylist(false);
-                        }
-                      }}
-                      className={`flex items-center gap-3.5 px-4 py-2.5 rounded-2xl cursor-pointer transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70 ${isCurrent
-                        ? "bg-amber-500/25 text-amber-200 border border-amber-400/40"
-                        : "hover:bg-white/15 text-slate-100"
-                        }`}
+                      onClick={() => playSong(song)}
+                      className={`flex items-center justify-between p-2 rounded-2xl cursor-pointer transition ${
+                        isCurrent
+                          ? "bg-amber-500/20 border border-amber-500/40 shadow-sm"
+                          : "hover:bg-slate-900/80 border border-transparent"
+                      }`}
                     >
-                      <span className="w-5 shrink-0 flex items-center justify-center">
-                        {isCurrent && isPlaying ? (
-                          <span className="flex items-end gap-0.5 h-3" aria-hidden="true">
-                            <span className="w-0.5 bg-amber-400 rounded-full animate-[eq_0.8s_ease-in-out_infinite]" style={{ height: "40%", animationDelay: "0ms" }} />
-                            <span className="w-0.5 bg-amber-400 rounded-full animate-[eq_0.8s_ease-in-out_infinite]" style={{ height: "100%", animationDelay: "150ms" }} />
-                            <span className="w-0.5 bg-amber-400 rounded-full animate-[eq_0.8s_ease-in-out_infinite]" style={{ height: "60%", animationDelay: "300ms" }} />
-                          </span>
-                        ) : (
-                          <span className={`text-xs font-mono ${isCurrent ? "text-amber-400 font-bold" : "text-slate-400"}`}>
-                            {i + 1}
-                          </span>
-                        )}
-                      </span>
-                      <div className="w-9 h-9 rounded-xl overflow-hidden bg-black/40 shrink-0 border border-white/20 flex items-center justify-center shadow-md">
-                        {song.cover_url ? (
-                          <img src={song.cover_url} alt="" className="w-full h-full object-cover" loading="lazy" />
-                        ) : (
-                          <Music className="w-4 h-4 text-amber-300/80" />
-                        )}
-                      </div>
-                      <div className="flex-grow min-w-0">
-                        <p className={`text-sm font-medium truncate ${isCurrent ? "text-amber-300 font-semibold" : "text-white"}`}>
-                          {song.title}
-                        </p>
-                        <p className="text-xs text-slate-300/80 truncate">{song.artist}</p>
-                      </div>
-                      {song.duration && (
-                        <span className="text-xs font-mono text-slate-300/80 shrink-0">
-                          {fmtTime(song.duration)}
+                      <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                        <span className="w-4 text-center font-mono text-[11px] text-slate-400 shrink-0">
+                          {isCurrent && isPlaying ? (
+                            <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping inline-block" />
+                          ) : (
+                            idx + 1
+                          )}
                         </span>
-                      )}
+
+                        {/* Song Cover Thumbnail */}
+                        <div className="w-9 h-9 rounded-xl overflow-hidden bg-black/50 shrink-0 border border-white/20 flex items-center justify-center shadow-md">
+                          {song.cover_url ? (
+                            <img
+                              src={song.cover_url}
+                              alt=""
+                              className="w-full h-full object-cover"
+                              loading="lazy"
+                            />
+                          ) : (
+                            <Music className="w-3.5 h-3.5 text-amber-300/80" />
+                          )}
+                        </div>
+
+                        <div className="min-w-0 flex-1">
+                          <div className={`text-xs font-semibold truncate ${isCurrent ? "text-amber-300 font-bold" : "text-slate-100"}`}>
+                            {song.title}
+                          </div>
+                          <div className="text-[11px] text-slate-400 truncate">{song.artist}</div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 ml-2 shrink-0">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleFavorite(song.id);
+                          }}
+                          className="p-1 rounded-full text-slate-400 hover:text-rose-400 hover:bg-white/10 transition"
+                          title="Favorite"
+                        >
+                          <Heart className={`w-3.5 h-3.5 ${isFav ? "fill-rose-500 text-rose-500" : ""}`} />
+                        </button>
+                        <span className="text-[10px] font-mono text-slate-400">{fmtTime(song.duration || 0)}</span>
+                      </div>
                     </div>
                   );
                 })}
-              </div>
-            ) : (
-              <div className="px-6 py-10 text-center">
-                <Music className="w-6 h-6 text-slate-400 mx-auto mb-2" />
-                <p className="text-sm text-slate-300">No tracks in this scene yet.</p>
-              </div>
-            )}
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* ── FLOATING GLASS PLAYER PILL ────────────────────────────────── */}
-      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-30 w-[94%] max-w-lg">
         {/* Subtle Floating Equalizer Waves Bar on top of the pill */}
         {isPlaying && (
           <div className="flex items-center justify-center gap-1 mb-2">
@@ -619,7 +832,7 @@ export default function ExperienceClient({ category }: ExperienceClientProps) {
                 </p>
                 {hasSongs && (
                   <span className="text-[10px] font-mono text-slate-300 shrink-0 tabular-nums">
-                    {fmtTime(currentTime)} / {fmtTime(duration)}
+                    {fmtTime(currentDisplayTime)} / {fmtTime(duration)}
                   </span>
                 )}
               </div>
@@ -629,36 +842,76 @@ export default function ExperienceClient({ category }: ExperienceClientProps) {
                 aria-label="Seek"
                 aria-valuemin={0}
                 aria-valuemax={duration || 0}
-                aria-valuenow={currentTime}
+                aria-valuenow={currentDisplayTime}
                 tabIndex={hasSongs ? 0 : -1}
-                className="h-1 bg-white/20 hover:bg-white/30 rounded-full cursor-pointer relative mt-1 transition"
-                onClick={(e) => {
-                  const rect = e.currentTarget.getBoundingClientRect();
-                  const ratio = (e.clientX - rect.left) / rect.width;
-                  seek(ratio * duration);
-                }}
+                className="py-1.5 cursor-pointer relative group touch-none select-none"
+                onPointerDown={handleSeekPointerDown}
+                onPointerMove={handleSeekPointerMove}
+                onPointerUp={handleSeekPointerUp}
+                onPointerCancel={handleSeekPointerUp}
                 onKeyDown={(e) => {
                   if (e.key === "ArrowRight") seek(Math.min(duration, currentTime + 5));
                   if (e.key === "ArrowLeft") seek(Math.max(0, currentTime - 5));
                 }}
               >
-                <div
-                  className="h-full bg-gradient-to-r from-amber-400 to-amber-300 rounded-full transition-all shadow-[0_0_8px_rgba(245,158,11,0.8)]"
-                  style={{ width: `${progress}%` }}
-                />
+                {/* Track Background */}
+                <div className="h-1.5 group-hover:h-2 bg-white/20 group-hover:bg-white/30 rounded-full transition-all relative overflow-visible">
+                  {/* Progress Fill */}
+                  <div
+                    className="h-full bg-gradient-to-r from-amber-400 to-amber-300 rounded-full shadow-[0_0_8px_rgba(245,158,11,0.8)] relative"
+                    style={{ width: `${progress}%` }}
+                  >
+                    {/* Scrub Handle / Thumb Indicator */}
+                    <div
+                      className={`absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 w-3.5 h-3.5 bg-amber-300 border-2 border-slate-950 rounded-full shadow-lg transition-transform ${
+                        isDraggingSeek ? "scale-125 ring-2 ring-amber-400" : "scale-0 group-hover:scale-100"
+                      }`}
+                    />
+                  </div>
+                </div>
               </div>
             </div>
           </div>
 
           {/* Right: Controls */}
           <div className="flex items-center gap-0.5 sm:gap-1 shrink-0">
+            {/* Scene Queue / Playlist Button */}
+            <button
+              onClick={() => setShowPlaylist((v) => !v)}
+              aria-label="Toggle playlist queue"
+              className={`p-1.5 rounded-full transition ${
+                showPlaylist
+                  ? "text-amber-300 bg-amber-500/20"
+                  : "text-slate-200 hover:text-white hover:bg-white/10"
+              }`}
+              title="Scene Queue"
+            >
+              <ListMusic className="w-4 h-4" />
+            </button>
+
+            {/* Favorite Button */}
+            <button
+              onClick={() => toggleFavorite()}
+              disabled={!currentSong}
+              aria-label="Toggle Favorite"
+              className="p-1.5 rounded-full text-slate-200 hover:text-white hover:bg-white/10 transition"
+              title={isCurrentFavorite ? "Remove from Favorites" : "Add to Favorites"}
+            >
+              <Heart
+                className={`w-4 h-4 ${
+                  isCurrentFavorite ? "fill-rose-500 text-rose-500" : "text-slate-300 hover:text-rose-400"
+                }`}
+              />
+            </button>
+
             <button
               onClick={toggleShuffle}
               disabled={!hasSongs}
               aria-label="Toggle shuffle"
               aria-pressed={isShuffle}
-              className={`hidden sm:inline-flex p-1.5 rounded-full transition disabled:opacity-30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70 ${isShuffle ? "text-amber-300 bg-amber-500/20" : "text-slate-200 hover:text-white hover:bg-white/10"
-                }`}
+              className={`hidden sm:inline-flex p-1.5 rounded-full transition disabled:opacity-30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70 ${
+                isShuffle ? "text-amber-300 bg-amber-500/20" : "text-slate-200 hover:text-white hover:bg-white/10"
+              }`}
             >
               <Shuffle className="w-4 h-4" />
             </button>
@@ -695,8 +948,9 @@ export default function ExperienceClient({ category }: ExperienceClientProps) {
               disabled={!hasSongs}
               aria-label="Toggle repeat mode"
               aria-pressed={repeatMode !== "off"}
-              className={`hidden sm:inline-flex p-1.5 rounded-full transition disabled:opacity-30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70 ${repeatMode !== "off" ? "text-amber-300 bg-amber-500/20" : "text-slate-200 hover:text-white hover:bg-white/10"
-                }`}
+              className={`hidden sm:inline-flex p-1.5 rounded-full transition disabled:opacity-30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70 ${
+                repeatMode !== "off" ? "text-amber-300 bg-amber-500/20" : "text-slate-200 hover:text-white hover:bg-white/10"
+              }`}
             >
               <RepeatIcon className="w-4 h-4" />
             </button>
@@ -738,7 +992,10 @@ export default function ExperienceClient({ category }: ExperienceClientProps) {
                       <VolumeIcon className="w-4 h-4" />
                     </button>
                     <input
-                      type="range" min={0} max={1} step={0.02}
+                      type="range"
+                      min={0}
+                      max={1}
+                      step={0.02}
                       value={effectiveVolume}
                       onChange={(e) => setVolume(parseFloat(e.target.value))}
                       aria-label="Volume level"
@@ -751,31 +1008,34 @@ export default function ExperienceClient({ category }: ExperienceClientProps) {
                 </div>
               )}
             </div>
-
-            <button
-              onClick={() => setShowPlaylist((v) => !v)}
-              aria-label="Toggle playlist"
-              aria-pressed={showPlaylist}
-              className={`p-1.5 rounded-full transition border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70 ${showPlaylist
-                ? "bg-amber-500/25 border-amber-400/50 text-amber-300"
-                : "bg-white/10 border-white/20 text-white hover:bg-white/20"
-                }`}
-            >
-              <ListMusic className="w-4 h-4" />
-            </button>
           </div>
         </div>
       </div>
 
-      <style jsx global>{`
-        @keyframes eq {
-          0%, 100% { transform: scaleY(0.4); }
-          50% { transform: scaleY(1); }
-        }
-        @media (prefers-reduced-motion: reduce) {
-          .animate-pulse, .animate-in { animation: none !important; }
-        }
-      `}</style>
+      {/* ── VINTAGE CASSETTE PLAYER MODAL VIEW ── */}
+      {showCassettePlayer && (
+        <VintageCassettePlayer
+          currentSong={currentSong}
+          isPlaying={isPlaying}
+          currentTime={currentTime}
+          duration={duration}
+          volume={volume}
+          isMuted={isMuted}
+          isShuffle={isShuffle}
+          repeatMode={repeatMode}
+          isFavorite={isCurrentFavorite}
+          onTogglePlay={togglePlay}
+          onPrevTrack={prevTrack}
+          onNextTrack={nextTrack}
+          onSeek={seek}
+          onSetVolume={setVolume}
+          onToggleMute={toggleMute}
+          onToggleShuffle={toggleShuffle}
+          onToggleRepeat={toggleRepeat}
+          onToggleFavorite={() => toggleFavorite()}
+          onClose={() => setShowCassettePlayer(false)}
+        />
+      )}
     </div>
   );
 }

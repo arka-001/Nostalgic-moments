@@ -1,281 +1,296 @@
 /**
- * Procedural Web Audio Ambient Soundscapes for Nostalgic Moments
- * Generates continuous, realistic analog background textures (Bus rumble, rain, chai stall, salon scissors, station)
- * or plays custom streaming ambient audio loops with master volume control.
+ * Multi-Layer Ambient Soundscape Audio Engine for Nostalgic Moments
+ * Supports simultaneous multi-layer playback (Rain, Thunder, Bus Engine, Tea Stall,
+ * Salon Scissors, Birds, Train Tracks, Car Engine, Road Noise) with individual volume faders,
+ * mute/unmute, looping, and cinematic sleep timer fade-outs.
  */
 
-export type AmbientType = "auto" | "bus" | "chai" | "salon" | "car_rain" | "train" | "vinyl" | "custom_url" | "off";
+export interface AmbientLayerConfig {
+  id: string;
+  name: string;
+  category: string;
+  defaultVolume: number;
+  url?: string;
+  iconName: string;
+}
 
-class AmbientAudioEngine {
-  private ctx: AudioContext | null = null;
-  private masterGain: GainNode | null = null;
-  private nodes: (AudioNode | number)[] = [];
-  private customAudio: HTMLAudioElement | null = null;
-  private isRunning: boolean = false;
-  private currentType: AmbientType = "off";
-  private currentVolume: number = 0.25;
+export const AVAILABLE_AMBIENT_LAYERS: AmbientLayerConfig[] = [
+  {
+    id: "rain",
+    name: "Window Rain",
+    category: "Weather",
+    defaultVolume: 0.35,
+    iconName: "CloudRain",
+    url: "https://assets.mixkit.co/active_storage/sfx/1254/1254-preview.mp3",
+  },
+  {
+    id: "thunder",
+    name: "Distant Thunder",
+    category: "Weather",
+    defaultVolume: 0.25,
+    iconName: "CloudLightning",
+    url: "https://assets.mixkit.co/active_storage/sfx/1271/1271-preview.mp3",
+  },
+  {
+    id: "bus_engine",
+    name: "Vintage Bus Engine",
+    category: "Travel",
+    defaultVolume: 0.30,
+    iconName: "Bus",
+    url: "https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3",
+  },
+  {
+    id: "tea_stall",
+    name: "Boiling Kettle & Chai",
+    category: "Urban",
+    defaultVolume: 0.25,
+    iconName: "Coffee",
+    url: "https://assets.mixkit.co/active_storage/sfx/2418/2418-preview.mp3",
+  },
+  {
+    id: "salon_scissors",
+    name: "Salon Scissors & Hiss",
+    category: "Urban",
+    defaultVolume: 0.20,
+    iconName: "Scissors",
+    url: "https://assets.mixkit.co/active_storage/sfx/1655/1655-preview.mp3",
+  },
+  {
+    id: "birds",
+    name: "Morning Birds",
+    category: "Nature",
+    defaultVolume: 0.25,
+    iconName: "Trees",
+    url: "https://assets.mixkit.co/active_storage/sfx/2436/2436-preview.mp3",
+  },
+  {
+    id: "train_tracks",
+    name: "Rhythmic Train Tracks",
+    category: "Travel",
+    defaultVolume: 0.30,
+    iconName: "Train",
+    url: "https://assets.mixkit.co/active_storage/sfx/2573/2573-preview.mp3",
+  },
+  {
+    id: "car_engine",
+    name: "Midnight Car Ride",
+    category: "Travel",
+    defaultVolume: 0.25,
+    iconName: "Car",
+    url: "https://assets.mixkit.co/active_storage/sfx/2569/2569-preview.mp3",
+  },
+  {
+    id: "road_noise",
+    name: "Highway Road Ambience",
+    category: "Travel",
+    defaultVolume: 0.20,
+    iconName: "Wind",
+    url: "https://assets.mixkit.co/active_storage/sfx/1252/1252-preview.mp3",
+  },
+];
 
-  private initContext() {
-    if (!this.ctx) {
-      const AudioCtx =
-        window.AudioContext ||
-        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      this.ctx = new AudioCtx();
-      this.masterGain = this.ctx.createGain();
-      this.masterGain.gain.setValueAtTime(this.currentVolume, this.ctx.currentTime);
-      this.masterGain.connect(this.ctx.destination);
+export interface LayerState {
+  isPlaying: boolean;
+  volume: number;
+  isMuted: boolean;
+}
+
+export type MultiLayerStateMap = Record<string, LayerState>;
+
+class MultiLayerAmbientEngine {
+  private audioInstances: Map<string, HTMLAudioElement> = new Map();
+  private stateMap: MultiLayerStateMap = {};
+  private masterVolume: number = 1.0;
+  private listeners: Set<(state: MultiLayerStateMap) => void> = new Set();
+  private fadeInterval: ReturnType<typeof setInterval> | null = null;
+
+  constructor() {
+    // Initialize default states
+    AVAILABLE_AMBIENT_LAYERS.forEach((layer) => {
+      this.stateMap[layer.id] = {
+        isPlaying: false,
+        volume: layer.defaultVolume,
+        isMuted: false,
+      };
+    });
+  }
+
+  private notify() {
+    this.listeners.forEach((fn) => fn({ ...this.stateMap }));
+  }
+
+  public subscribe(callback: (state: MultiLayerStateMap) => void) {
+    this.listeners.add(callback);
+    callback({ ...this.stateMap });
+    return () => {
+      this.listeners.delete(callback);
+    };
+  }
+
+  private getAudioInstance(layerId: string): HTMLAudioElement | null {
+    if (typeof window === "undefined") return null;
+    let audio = this.audioInstances.get(layerId);
+    if (!audio) {
+      const config = AVAILABLE_AMBIENT_LAYERS.find((l) => l.id === layerId);
+      if (!config || !config.url) return null;
+      audio = new Audio(config.url);
+      audio.loop = true;
+      audio.preload = "auto";
+      this.audioInstances.set(layerId, audio);
     }
-    if (this.ctx.state === "suspended") {
-      this.ctx.resume();
+    return audio;
+  }
+
+  public toggleLayer(layerId: string) {
+    const current = this.stateMap[layerId];
+    if (!current) return;
+    if (current.isPlaying) {
+      this.stopLayer(layerId);
+    } else {
+      this.playLayer(layerId);
     }
   }
 
-  private createNoiseBuffer(): AudioBuffer {
-    if (!this.ctx) throw new Error("No context");
-    const bufferSize = this.ctx.sampleRate * 2;
-    const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
-    const data = buffer.getChannelData(0);
-    let lastOut = 0.0;
-    for (let i = 0; i < bufferSize; i++) {
-      const white = Math.random() * 2 - 1;
-      // Brown / Pink noise approximation for warm organic textures
-      data[i] = (lastOut + 0.02 * white) / 1.02;
-      lastOut = data[i];
-      data[i] *= 3.5;
-    }
-    return buffer;
+  public playLayer(layerId: string) {
+    const state = this.stateMap[layerId];
+    if (!state) return;
+    const audio = this.getAudioInstance(layerId);
+    if (!audio) return;
+
+    state.isPlaying = true;
+    const effectiveVol = state.isMuted ? 0 : state.volume * this.masterVolume;
+    audio.volume = Math.max(0, Math.min(1, effectiveVol));
+    audio.play().catch((e) => console.warn(`Ambient audio ${layerId} autoplay restricted:`, e));
+    this.notify();
   }
 
-  public setVolume(volume: number) {
-    this.currentVolume = Math.max(0, Math.min(1, volume));
-    if (this.masterGain && this.ctx) {
-      this.masterGain.gain.setTargetAtTime(this.currentVolume, this.ctx.currentTime, 0.05);
+  public stopLayer(layerId: string) {
+    const state = this.stateMap[layerId];
+    if (!state) return;
+    const audio = this.audioInstances.get(layerId);
+    if (audio) {
+      try {
+        audio.pause();
+      } catch (_) {}
     }
-    if (this.customAudio) {
-      this.customAudio.volume = this.currentVolume;
-    }
+    state.isPlaying = false;
+    this.notify();
   }
 
-  public stop() {
-    this.nodes.forEach((node) => {
-      if (typeof node === "number") {
-        window.clearInterval(node);
-      } else {
-        try {
-          if ("stop" in node && typeof (node as AudioScheduledSourceNode).stop === "function") {
-            (node as AudioScheduledSourceNode).stop();
-          }
-          node.disconnect();
-        } catch (_) {}
+  public setLayerVolume(layerId: string, volume: number) {
+    const state = this.stateMap[layerId];
+    if (!state) return;
+    state.volume = Math.max(0, Math.min(1, volume));
+    if (state.isMuted && volume > 0) {
+      state.isMuted = false;
+    }
+    const audio = this.audioInstances.get(layerId);
+    if (audio) {
+      const effectiveVol = state.isMuted ? 0 : state.volume * this.masterVolume;
+      audio.volume = Math.max(0, Math.min(1, effectiveVol));
+    }
+    this.notify();
+  }
+
+  public toggleLayerMute(layerId: string) {
+    const state = this.stateMap[layerId];
+    if (!state) return;
+    state.isMuted = !state.isMuted;
+    const audio = this.audioInstances.get(layerId);
+    if (audio) {
+      const effectiveVol = state.isMuted ? 0 : state.volume * this.masterVolume;
+      audio.volume = Math.max(0, Math.min(1, effectiveVol));
+    }
+    this.notify();
+  }
+
+  public setMasterVolume(vol: number) {
+    this.masterVolume = Math.max(0, Math.min(1, vol));
+    AVAILABLE_AMBIENT_LAYERS.forEach((layer) => {
+      const state = this.stateMap[layer.id];
+      const audio = this.audioInstances.get(layer.id);
+      if (state && audio) {
+        const effectiveVol = state.isMuted ? 0 : state.volume * this.masterVolume;
+        audio.volume = Math.max(0, Math.min(1, effectiveVol));
       }
     });
-    this.nodes = [];
+  }
 
-    if (this.customAudio) {
+  public stopAll() {
+    if (this.fadeInterval) clearInterval(this.fadeInterval);
+    this.audioInstances.forEach((audio) => {
       try {
-        this.customAudio.pause();
-        this.customAudio.src = "";
+        audio.pause();
       } catch (_) {}
-      this.customAudio = null;
-    }
-
-    this.isRunning = false;
-    this.currentType = "off";
+    });
+    AVAILABLE_AMBIENT_LAYERS.forEach((layer) => {
+      if (this.stateMap[layer.id]) {
+        this.stateMap[layer.id].isPlaying = false;
+      }
+    });
+    this.notify();
   }
 
-  public play(type: AmbientType, customUrl?: string) {
-    if (type === "off") {
-      this.stop();
-      return;
-    }
+  /**
+   * Smoothly fade all active ambient tracks to zero over specified seconds (Sleep Timer)
+   */
+  public fadeOutAll(durationSec: number = 15, onComplete?: () => void) {
+    if (this.fadeInterval) clearInterval(this.fadeInterval);
+    const steps = 30;
+    const intervalMs = (durationSec * 1000) / steps;
+    const startMaster = this.masterVolume;
+    let stepCount = 0;
 
-    this.stop();
-    this.currentType = type;
-    this.isRunning = true;
+    this.fadeInterval = setInterval(() => {
+      stepCount++;
+      const factor = Math.max(0, 1 - stepCount / steps);
+      this.setMasterVolume(startMaster * factor);
 
-    // 1. Custom URL loop audio playback
-    if (type === "custom_url" && customUrl) {
-      try {
-        this.customAudio = new Audio(customUrl);
-        this.customAudio.loop = true;
-        this.customAudio.volume = this.currentVolume;
-        this.customAudio.play().catch((e) => {
-          console.warn("Autoplay prevented on ambient custom audio:", e);
-        });
-      } catch (err) {
-        console.error("Failed to load custom ambient sound:", err);
+      if (stepCount >= steps) {
+        if (this.fadeInterval) clearInterval(this.fadeInterval);
+        this.stopAll();
+        this.setMasterVolume(1.0); // Reset for next session
+        if (onComplete) onComplete();
       }
-      return;
-    }
-
-    // 2. Procedural Web Audio synthesis
-    this.initContext();
-    if (!this.ctx || !this.masterGain) return;
-
-    const noiseBuffer = this.createNoiseBuffer();
-
-    switch (type) {
-      case "bus": {
-        const noiseSource = this.ctx.createBufferSource();
-        noiseSource.buffer = noiseBuffer;
-        noiseSource.loop = true;
-
-        const filter = this.ctx.createBiquadFilter();
-        filter.type = "lowpass";
-        filter.frequency.setValueAtTime(140, this.ctx.currentTime);
-
-        const osc = this.ctx.createOscillator();
-        osc.type = "triangle";
-        osc.frequency.setValueAtTime(48, this.ctx.currentTime);
-
-        const oscGain = this.ctx.createGain();
-        oscGain.gain.setValueAtTime(0.15, this.ctx.currentTime);
-
-        noiseSource.connect(filter);
-        filter.connect(this.masterGain);
-        osc.connect(oscGain);
-        oscGain.connect(this.masterGain);
-
-        noiseSource.start();
-        osc.start();
-        this.nodes.push(noiseSource, filter, osc, oscGain);
-        break;
-      }
-
-      case "car_rain": {
-        const rainSource = this.ctx.createBufferSource();
-        rainSource.buffer = noiseBuffer;
-        rainSource.loop = true;
-
-        const rainFilter = this.ctx.createBiquadFilter();
-        rainFilter.type = "bandpass";
-        rainFilter.frequency.setValueAtTime(800, this.ctx.currentTime);
-        rainFilter.Q.setValueAtTime(0.6, this.ctx.currentTime);
-
-        const rumbleFilter = this.ctx.createBiquadFilter();
-        rumbleFilter.type = "lowpass";
-        rumbleFilter.frequency.setValueAtTime(120, this.ctx.currentTime);
-
-        rainSource.connect(rainFilter);
-        rainFilter.connect(this.masterGain);
-
-        const rumbleSource = this.ctx.createBufferSource();
-        rumbleSource.buffer = noiseBuffer;
-        rumbleSource.loop = true;
-        rumbleSource.connect(rumbleFilter);
-        rumbleFilter.connect(this.masterGain);
-
-        rainSource.start();
-        rumbleSource.start();
-        this.nodes.push(rainSource, rainFilter, rumbleSource, rumbleFilter);
-        break;
-      }
-
-      case "chai": {
-        const chaiSource = this.ctx.createBufferSource();
-        chaiSource.buffer = noiseBuffer;
-        chaiSource.loop = true;
-
-        const chaiFilter = this.ctx.createBiquadFilter();
-        chaiFilter.type = "bandpass";
-        chaiFilter.frequency.setValueAtTime(450, this.ctx.currentTime);
-        chaiFilter.Q.setValueAtTime(1.2, this.ctx.currentTime);
-
-        chaiSource.connect(chaiFilter);
-        chaiFilter.connect(this.masterGain);
-        chaiSource.start();
-        this.nodes.push(chaiSource, chaiFilter);
-        break;
-      }
-
-      case "salon": {
-        const hissSource = this.ctx.createBufferSource();
-        hissSource.buffer = noiseBuffer;
-        hissSource.loop = true;
-
-        const hissFilter = this.ctx.createBiquadFilter();
-        hissFilter.type = "highpass";
-        hissFilter.frequency.setValueAtTime(1200, this.ctx.currentTime);
-
-        const hissGain = this.ctx.createGain();
-        hissGain.gain.setValueAtTime(0.08, this.ctx.currentTime);
-
-        hissSource.connect(hissFilter);
-        hissFilter.connect(hissGain);
-        hissGain.connect(this.masterGain);
-        hissSource.start();
-        this.nodes.push(hissSource, hissFilter, hissGain);
-        break;
-      }
-
-      case "train": {
-        const trackSource = this.ctx.createBufferSource();
-        trackSource.buffer = noiseBuffer;
-        trackSource.loop = true;
-
-        const trainFilter = this.ctx.createBiquadFilter();
-        trainFilter.type = "lowpass";
-        trainFilter.frequency.setValueAtTime(160, this.ctx.currentTime);
-
-        trackSource.connect(trainFilter);
-        trainFilter.connect(this.masterGain);
-        trackSource.start();
-
-        const trackPulseGain = this.ctx.createGain();
-        trackPulseGain.gain.setValueAtTime(0.0, this.ctx.currentTime);
-
-        const osc = this.ctx.createOscillator();
-        osc.type = "sine";
-        osc.frequency.setValueAtTime(65, this.ctx.currentTime);
-        osc.connect(trackPulseGain);
-        trackPulseGain.connect(this.masterGain);
-        osc.start();
-
-        let count = 0;
-        const intervalId = window.setInterval(() => {
-          if (!this.ctx || !this.isRunning) return;
-          const now = this.ctx.currentTime;
-          count++;
-          const val = count % 2 === 0 ? 0.2 : 0.12;
-          trackPulseGain.gain.cancelScheduledValues(now);
-          trackPulseGain.gain.setValueAtTime(val, now);
-          trackPulseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
-        }, 420);
-
-        this.nodes.push(trackSource, trainFilter, osc, trackPulseGain, intervalId);
-        break;
-      }
-
-      case "vinyl": {
-        const vinylSource = this.ctx.createBufferSource();
-        vinylSource.buffer = noiseBuffer;
-        vinylSource.loop = true;
-
-        const vinylFilter = this.ctx.createBiquadFilter();
-        vinylFilter.type = "bandpass";
-        vinylFilter.frequency.setValueAtTime(3000, this.ctx.currentTime);
-        vinylFilter.Q.setValueAtTime(2.0, this.ctx.currentTime);
-
-        const vinylGain = this.ctx.createGain();
-        vinylGain.gain.setValueAtTime(0.06, this.ctx.currentTime);
-
-        vinylSource.connect(vinylFilter);
-        vinylFilter.connect(vinylGain);
-        vinylGain.connect(this.masterGain);
-        vinylSource.start();
-        this.nodes.push(vinylSource, vinylFilter, vinylGain);
-        break;
-      }
-    }
+    }, intervalMs);
   }
 
-  public getStatus() {
-    return {
-      isRunning: this.isRunning,
-      currentType: this.currentType,
-      currentVolume: this.currentVolume,
-    };
+  public getState(): MultiLayerStateMap {
+    return { ...this.stateMap };
   }
 }
 
-export const ambientEngine = typeof window !== "undefined" ? new AmbientAudioEngine() : null;
+export const multiAmbientEngine = typeof window !== "undefined" ? new MultiLayerAmbientEngine() : null;
+
+// Legacy adapter for category-level initial soundscapes
+export type AmbientType = "auto" | "bus" | "chai" | "salon" | "car_rain" | "train" | "vinyl" | "custom_url" | "off";
+
+export const ambientEngine = {
+  play: (type: AmbientType, customUrl?: string) => {
+    if (!multiAmbientEngine) return;
+    if (type === "off") {
+      multiAmbientEngine.stopAll();
+      return;
+    }
+    // Map legacy environment types to layer
+    let targetLayer = "road_noise";
+    if (type === "bus") targetLayer = "bus_engine";
+    if (type === "chai") targetLayer = "tea_stall";
+    if (type === "salon") targetLayer = "salon_scissors";
+    if (type === "car_rain") targetLayer = "rain";
+    if (type === "train") targetLayer = "train_tracks";
+
+    multiAmbientEngine.playLayer(targetLayer);
+  },
+  setVolume: (vol: number) => {
+    if (multiAmbientEngine) multiAmbientEngine.setMasterVolume(vol);
+  },
+  stop: () => {
+    if (multiAmbientEngine) multiAmbientEngine.stopAll();
+  },
+  getStatus: () => ({
+    isRunning: true,
+    currentType: "auto" as AmbientType,
+    currentVolume: 0.3,
+  }),
+};

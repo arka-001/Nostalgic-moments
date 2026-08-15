@@ -5,11 +5,27 @@ import {
   Music, FolderOpen, CheckCircle, Layers, Radio, TrendingUp,
   Wind, Clock, Database, ShieldCheck, Play, Pause, ExternalLink,
   Sparkles, Activity, HardDrive, ArrowUpRight, Lock, Key, RefreshCw,
-  BarChart3, Headphones, Award, Flame, Users, Calendar
+  BarChart3, Headphones, Award, Flame, Users, Calendar, Youtube, Globe
 } from "lucide-react";
 import Link from "next/link";
-import { fetchCategories, fetchSongs, fetchHealthStatus, fetchAnalyticsOverview } from "@/lib/api";
-import { Category, Song, HealthStatus, AnalyticsOverviewResponse } from "@/types";
+import {
+  fetchCategories,
+  fetchSongs,
+  fetchHealthStatus,
+  fetchAnalyticsOverview,
+  fetchYouTubePlaylists,
+  fetchYouTubeSettings,
+  fetchVisitorTelemetry,
+} from "@/lib/api";
+import {
+  Category,
+  Song,
+  HealthStatus,
+  AnalyticsOverviewResponse,
+  YouTubePlaylist,
+  YouTubeSettings,
+  VisitorTelemetrySummary,
+} from "@/types";
 
 export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
@@ -17,6 +33,9 @@ export default function AdminDashboard() {
   const [songs, setSongs] = useState<Song[]>([]);
   const [health, setHealth] = useState<HealthStatus | null>(null);
   const [analytics, setAnalytics] = useState<AnalyticsOverviewResponse | null>(null);
+  const [ytPlaylists, setYtPlaylists] = useState<YouTubePlaylist[]>([]);
+  const [ytSettings, setYtSettings] = useState<YouTubeSettings | null>(null);
+  const [visitorStats, setVisitorStats] = useState<VisitorTelemetrySummary | null>(null);
   const [playingSongUrl, setPlayingSongUrl] = useState<string | null>(null);
   const [audioElem, setAudioElem] = useState<HTMLAudioElement | null>(null);
   const [activeTab, setActiveTab] = useState<"overview" | "leaderboard" | "hourly">("overview");
@@ -24,17 +43,23 @@ export default function AdminDashboard() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [cats, songList, healthData, analyticsData] = await Promise.all([
+      const [cats, songList, healthData, analyticsData, ytPlData, ytSetData, visitorData] = await Promise.all([
         fetchCategories(true),
         fetchSongs(true),
         fetchHealthStatus().catch(() => null),
         fetchAnalyticsOverview().catch(() => null),
+        fetchYouTubePlaylists().catch(() => []),
+        fetchYouTubeSettings().catch(() => null),
+        fetchVisitorTelemetry({ limit: 5 }).catch(() => null),
       ]);
 
       setCategories(cats);
       setSongs(songList);
       setHealth(healthData);
       setAnalytics(analyticsData);
+      setYtPlaylists(ytPlData);
+      setYtSettings(ytSetData);
+      setVisitorStats(visitorData);
     } catch (e) {
       console.error(e);
     } finally {
@@ -223,6 +248,82 @@ export default function AdminDashboard() {
               {topSongsList.length > 0 ? `${topSongsList[0].play_count} streams` : "—"}
             </span>
           </div>
+        </div>
+      </div>
+
+      {/* ── YOUTUBE INTEGRATION OVERVIEW BANNER ── */}
+      <div className="rounded-3xl p-6 bg-gradient-to-r from-red-950/40 via-slate-900/90 to-amber-950/30 border border-slate-800 shadow-xl backdrop-blur-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 rounded-2xl bg-red-500/10 border border-red-500/30 flex items-center justify-center shrink-0">
+            <Youtube className="w-6 h-6 text-red-400" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="text-base font-serif font-bold text-amber-100">
+                YouTube Integration Station
+              </h3>
+              <span
+                className={`text-[10px] font-mono px-2 py-0.5 rounded-full border ${
+                  ytSettings?.is_enabled
+                    ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/30"
+                    : "bg-slate-800 text-slate-400 border-slate-700"
+                }`}
+              >
+                {ytSettings?.is_enabled ? "● Active" : "○ Disabled"}
+              </span>
+            </div>
+            <p className="text-xs text-slate-400 mt-0.5">
+              {ytPlaylists.length} YouTube Playlists configured •{" "}
+              {songs.filter((s) => s.source_type === "youtube").length} YouTube Tracks in Library
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <Link
+            href="/admin/youtube"
+            className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-mono font-medium transition flex items-center gap-1.5"
+          >
+            <span>Manage Playlists</span>
+            <ExternalLink className="w-3 h-3" />
+          </Link>
+        </div>
+      </div>
+
+      {/* ── LIVE AUDIENCE & IP GEOLOCATION RADAR BANNER ── */}
+      <div className="rounded-3xl p-6 bg-gradient-to-r from-emerald-950/40 via-slate-900/90 to-cyan-950/30 border border-emerald-500/30 shadow-xl backdrop-blur-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center shrink-0">
+            <Globe className="w-6 h-6 text-emerald-400" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="text-base font-serif font-bold text-amber-100 flex items-center gap-2">
+                Live Visitors & GeoIP Radar
+              </h3>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full border bg-emerald-500/10 text-emerald-300 border-emerald-500/30 flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                {visitorStats?.live_online_count ?? 1} Online Now
+              </span>
+            </div>
+            <p className="text-xs text-slate-400 mt-0.5">
+              {visitorStats?.total_unique_visitors ?? 0} unique IP sessions tracked across{" "}
+              {visitorStats?.total_countries_reached ?? 1} countries • Top City:{" "}
+              <strong className="text-cyan-300 font-normal">
+                {visitorStats?.top_cities?.[0]?.name ?? "Kolkata, India"}
+              </strong>
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <Link
+            href="/admin/visitors"
+            className="px-4 py-2 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 text-xs font-mono font-medium transition flex items-center gap-1.5"
+          >
+            <span>Live IP Intelligence</span>
+            <ExternalLink className="w-3 h-3" />
+          </Link>
         </div>
       </div>
 

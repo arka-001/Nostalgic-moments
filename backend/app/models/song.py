@@ -19,6 +19,9 @@ class Song(Base):
     duration: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     audio_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     cover_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    source_type: Mapped[str] = mapped_column(String(50), default="uploaded", nullable=False)
+    youtube_video_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)
+    youtube_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(

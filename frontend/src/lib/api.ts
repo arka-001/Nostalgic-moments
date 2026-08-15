@@ -8,6 +8,12 @@ import {
   FileUploadResponse,
   CategorySongOrderItem,
   AnalyticsOverviewResponse,
+  YouTubeSettings,
+  YouTubeConnectionTestResponse,
+  YouTubePlaylist,
+  YouTubeImportResult,
+  VisitorTelemetrySummary,
+  VisitorSession,
 } from "../types";
 
 
@@ -271,9 +277,25 @@ export async function uploadImageFile(
   });
 }
 
+// --- Session Identifier Helper ---
+export function getOrCreateSessionId(): string {
+  if (typeof window === "undefined") return "server_session";
+  try {
+    let sess = localStorage.getItem("nostalgic_session_id");
+    if (!sess) {
+      sess = "sess_" + Math.random().toString(36).substring(2, 15) + "_" + Date.now().toString(36);
+      localStorage.setItem("nostalgic_session_id", sess);
+    }
+    return sess;
+  } catch (_) {
+    return "sess_fallback_" + Date.now();
+  }
+}
+
 // --- Analytics APIs ---
 export async function trackPlaybackEvent(data: {
   event_type?: string;
+  session_id?: string;
   category_slug?: string;
   category_name?: string;
   song_id?: string;
@@ -282,18 +304,170 @@ export async function trackPlaybackEvent(data: {
   duration_listened?: number;
 }): Promise<void> {
   try {
+    const payload = {
+      ...data,
+      session_id: data.session_id || getOrCreateSessionId(),
+    };
     await fetch(`${API_BASE_URL}/api/analytics/track`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
+      body: JSON.stringify(payload),
     });
   } catch (_) {
     // Silent fail for non-blocking telemetry
   }
 }
 
+export async function sendHeartbeat(data: {
+  session_id?: string;
+  current_path?: string;
+  current_environment?: string;
+  current_song_title?: string;
+  current_song_artist?: string;
+  is_playing?: boolean;
+  duration_increment?: number;
+}): Promise<void> {
+  try {
+    const payload = {
+      ...data,
+      session_id: data.session_id || getOrCreateSessionId(),
+      is_playing: Boolean(data.is_playing),
+    };
+    await fetch(`${API_BASE_URL}/api/analytics/heartbeat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  } catch (_) {
+    // Silent fail
+  }
+}
+
+export async function fetchVisitorTelemetry(params?: {
+  page?: number;
+  limit?: number;
+  search?: string;
+  status_filter?: string;
+  country_filter?: string;
+  environment_filter?: string;
+}): Promise<VisitorTelemetrySummary> {
+  const query = new URLSearchParams();
+  if (params?.page) query.set("page", String(params.page));
+  if (params?.limit) query.set("limit", String(params.limit));
+  if (params?.search) query.set("search", params.search);
+  if (params?.status_filter) query.set("status_filter", params.status_filter);
+  if (params?.country_filter) query.set("country_filter", params.country_filter);
+  if (params?.environment_filter) query.set("environment_filter", params.environment_filter);
+
+  const qs = query.toString();
+  return apiFetch<VisitorTelemetrySummary>(`/api/analytics/admin/visitors${qs ? `?${qs}` : ""}`, {
+    cache: "no-store",
+  });
+}
+
+// --- IP Protection APIs ---
+export async function toggleBlockIp(ip: string): Promise<{ status: string; is_blocked: boolean; message: string }> {
+  return apiFetch<{ status: string; is_blocked: boolean; message: string }>(
+    `/api/analytics/admin/visitors/${encodeURIComponent(ip)}/toggle-block`,
+    {
+      method: "POST",
+    }
+  );
+}
+
+export async function fetchBlockedIps(): Promise<any[]> {
+  return apiFetch<any[]>("/api/analytics/admin/blocked-ips", {
+    cache: "no-store",
+  });
+}
+
+export async function createBlockedIp(data: { ip_address: string; reason?: string }): Promise<any> {
+  return apiFetch<any>("/api/analytics/admin/blocked-ips", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteBlockedIp(ip: string): Promise<void> {
+  return apiFetch<void>(`/api/analytics/admin/blocked-ips/${encodeURIComponent(ip)}`, {
+    method: "DELETE",
+  });
+}
+
+export function getCsvExportUrl(type: "visitors" | "streaming"): string {
+  return `${API_BASE_URL}/api/analytics/admin/export-csv?type=${type}`;
+}
+
 export async function fetchAnalyticsOverview(): Promise<AnalyticsOverviewResponse> {
   return apiFetch<AnalyticsOverviewResponse>("/api/analytics/admin/overview");
 }
+
+// --- YouTube Integration APIs ---
+export async function fetchYouTubeSettings(): Promise<YouTubeSettings> {
+  return apiFetch<YouTubeSettings>("/api/admin/youtube/settings", {
+    cache: "no-store",
+  });
+}
+
+export async function updateYouTubeSettings(data: {
+  is_enabled?: boolean;
+  api_key?: string;
+}): Promise<YouTubeSettings> {
+  return apiFetch<YouTubeSettings>("/api/admin/youtube/settings", {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function testYouTubeConnection(): Promise<YouTubeConnectionTestResponse> {
+  return apiFetch<YouTubeConnectionTestResponse>("/api/admin/youtube/test", {
+    method: "POST",
+  });
+}
+
+export async function fetchYouTubePlaylists(): Promise<YouTubePlaylist[]> {
+  try {
+    return await apiFetch<YouTubePlaylist[]>("/api/admin/youtube/playlists", {
+      cache: "no-store",
+    });
+  } catch (error) {
+    console.error("Error fetching YouTube playlists:", error);
+    return [];
+  }
+}
+
+export async function createYouTubePlaylist(data: {
+  url_or_id: string;
+  category_id: string;
+  is_active?: boolean;
+}): Promise<YouTubeImportResult> {
+  return apiFetch<YouTubeImportResult>("/api/admin/youtube/playlists", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function syncYouTubePlaylist(id: string): Promise<YouTubeImportResult> {
+  return apiFetch<YouTubeImportResult>(`/api/admin/youtube/playlists/${id}/sync`, {
+    method: "POST",
+  });
+}
+
+export async function updateYouTubePlaylist(
+  id: string,
+  data: Partial<YouTubePlaylist>
+): Promise<YouTubePlaylist> {
+  return apiFetch<YouTubePlaylist>(`/api/admin/youtube/playlists/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteYouTubePlaylist(id: string): Promise<void> {
+  return apiFetch<void>(`/api/admin/youtube/playlists/${id}`, {
+    method: "DELETE",
+  });
+}
+
 
 
